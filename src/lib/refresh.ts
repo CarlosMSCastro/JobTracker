@@ -1,5 +1,5 @@
 import { prisma } from "./db";
-import { findExistingJob } from "./dedupe";
+import { filterNewJobs } from "./dedupe";
 import { FETCHERS } from "./sources/registry";
 import type { Source } from "@/generated/prisma/client";
 import type { SourceConfig } from "./sources/types";
@@ -44,18 +44,12 @@ async function refreshSource(source: Source): Promise<RefreshSummary> {
     const fetcherConfig: SourceConfig = { apiKey: API_KEY_ENV[fetcherKey!] };
     const jobs = await fetcher(fetcherConfig);
 
+    const newJobs = await filterNewJobs(jobs);
+
     let created = 0;
-    let skipped = 0;
-
-    for (const job of jobs) {
-      const existing = await findExistingJob(job);
-      if (existing) {
-        skipped += 1;
-        continue;
-      }
-
-      await prisma.job.create({
-        data: {
+    if (newJobs.length > 0) {
+      const result = await prisma.job.createMany({
+        data: newJobs.map((job) => ({
           sourceId: source.id,
           externalId: job.externalId,
           title: job.title,
@@ -68,10 +62,12 @@ async function refreshSource(source: Source): Promise<RefreshSummary> {
           isInternship: job.isInternship ?? false,
           url: job.url,
           publishedAt: job.publishedAt,
-        },
+        })),
+        skipDuplicates: true,
       });
-      created += 1;
+      created = result.count;
     }
+    const skipped = jobs.length - created;
 
     const updated = await prisma.source.update({
       where: { id: source.id },
