@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { NORTE_REGION_KEYWORDS } from "@/lib/sources/relevance";
 import type { JobStatus, Prisma, RemoteType } from "@/generated/prisma/client";
 
 export async function GET(request: NextRequest) {
@@ -25,14 +26,30 @@ export async function GET(request: NextRequest) {
   const isInternship = params.get("isInternship");
   if (isInternship !== null) where.isInternship = isInternship === "true";
 
+  const and: Prisma.JobWhereInput[] = [];
+
   const q = params.get("q");
   if (q) {
-    where.OR = [
-      { title: { contains: q } },
-      { company: { contains: q } },
-      { tags: { contains: q } },
-    ];
+    and.push({
+      OR: [{ title: { contains: q } }, { company: { contains: q } }, { tags: { contains: q } }],
+    });
   }
+
+  const region = params.getAll("region");
+  if (region.includes("norte")) {
+    // Remoto passa sempre (não exige estar na zona); presencial/híbrido só entra se a localização
+    // bater com um concelho do Grande Porto/Braga/Guimarães.
+    and.push({
+      OR: [
+        { remoteType: "REMOTO" },
+        ...NORTE_REGION_KEYWORDS.map((kw) => ({
+          location: { contains: kw, mode: "insensitive" as const },
+        })),
+      ],
+    });
+  }
+
+  if (and.length) where.AND = and;
 
   const dateFrom = params.get("dateFrom");
   const dateTo = params.get("dateTo");

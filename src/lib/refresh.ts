@@ -1,6 +1,7 @@
 import { prisma } from "./db";
 import { filterNewJobs } from "./dedupe";
 import { FETCHERS } from "./sources/registry";
+import { isSeniorTitle } from "./sources/relevance";
 import type { Source } from "@/generated/prisma/client";
 import type { SourceConfig } from "./sources/types";
 
@@ -42,7 +43,8 @@ async function refreshSource(source: Source): Promise<RefreshSummary> {
 
   try {
     const fetcherConfig: SourceConfig = { apiKey: API_KEY_ENV[fetcherKey!] };
-    const jobs = await fetcher(fetcherConfig);
+    const fetchedJobs = await fetcher(fetcherConfig);
+    const jobs = fetchedJobs.filter((job) => !isSeniorTitle(job.title));
 
     const newJobs = await filterNewJobs(jobs);
 

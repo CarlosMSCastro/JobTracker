@@ -1,14 +1,37 @@
-import { classifyArea, detectRemoteType, hasAiSignal, isItRelevant } from "./relevance";
+import { classifyArea, detectRemoteType, hasAiSignal, isItRelevant, isSalesLike } from "./relevance";
 import type { Fetcher, NormalizedJob } from "./types";
 
-// Categorias do Net-Empregos (ver select "categoria" no formulário de pesquisa do site).
-// As "Informática (...)" já são inequivocamente relevantes; as outras são generalistas e cada
-// vaga é validada pelo título antes de entrar (para não trazer toda a loja de roupa ou call center
-// de seguros junto).
-const ALWAYS_RELEVANT_CATEGORY_IDS = [5, 34, 35, 36, 37, 38, 49]; // Informática (Programação/Formação/Internet/Multimedia/Redes/Sistemas/Hardware)
-const KEYWORD_GATED_CATEGORY_IDS = [57, 30, 52]; // Call Center / Help Desk, Lojas / Comércio / Balcão, Serviços Técnicos
+// Categorias do Net-Empregos (ver select "categoria" no formulário de pesquisa do site, mapeado
+// via probing de pesquisa-empregos.asp?categoria=N e leitura do <title> de cada página).
+// Modo por categoria:
+// - "none": informática — inequivocamente relevante, entra tudo.
+// - "sales": call center/help desk e administração/secretariado — a categoria já é relevante pelo
+//   nome (não faz sentido pedir "suporte/helpdesk" no título quando a categoria já É isso — mesma
+//   armadilha identificada antes), mas ainda tem vagas puramente comerciais lá dentro para excluir.
+// - "keyword": categorias generalistas (lojas, serviços técnicos) — cada vaga é validada pelo
+//   título antes de entrar, para não trazer toda a loja de roupa ou seguros junto.
+const CATEGORY_FILTER: Record<number, "none" | "sales" | "keyword"> = {
+  5: "none",
+  34: "none",
+  35: "none",
+  36: "none",
+  37: "none",
+  38: "none",
+  49: "none",
+  57: "sales", // Call Center / Help Desk
+  29: "sales", // Administração / Secretariado
+  30: "keyword", // Lojas / Comércio / Balcão
+  52: "keyword", // Serviços Técnicos
+};
 
-const PAGES_PER_CATEGORY = 2; // ~18 vagas por página — 2 páginas dá boa cobertura sem exagerar em pedidos
+const DEFAULT_PAGES_PER_CATEGORY = 2; // ~18 vagas por página — 2 páginas dá boa cobertura sem exagerar em pedidos
+// Call Center/Help Desk (1092 vagas) e Administração/Secretariado (1698 vagas) têm um volume muito
+// maior que as restantes categorias — pedido explícito do utilizador para trazer mais destas.
+const PAGES_OVERRIDE: Record<number, number> = { 57: 5, 29: 5 };
+
+function pagesForCategory(categoryId: number): number {
+  return PAGES_OVERRIDE[categoryId] ?? DEFAULT_PAGES_PER_CATEGORY;
+}
 const HEADERS = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" };
 const BASE_URL = "https://www.net-empregos.com";
 
@@ -67,25 +90,22 @@ export const fetchNetEmpregos: Fetcher = async () => {
   const jobs: NormalizedJob[] = [];
   const seenHrefs = new Set<string>();
 
-  const requests: Promise<{ items: ScrapedItem[]; keywordGated: boolean }>[] = [];
+  const requests: Promise<{ items: ScrapedItem[]; filter: "none" | "sales" | "keyword" }>[] = [];
 
-  for (const categoryId of ALWAYS_RELEVANT_CATEGORY_IDS) {
-    for (let page = 1; page <= PAGES_PER_CATEGORY; page++) {
-      requests.push(fetchCategoryPage(categoryId, page).then((items) => ({ items, keywordGated: false })));
-    }
-  }
-  for (const categoryId of KEYWORD_GATED_CATEGORY_IDS) {
-    for (let page = 1; page <= PAGES_PER_CATEGORY; page++) {
-      requests.push(fetchCategoryPage(categoryId, page).then((items) => ({ items, keywordGated: true })));
+  for (const [categoryIdStr, filter] of Object.entries(CATEGORY_FILTER)) {
+    const categoryId = Number(categoryIdStr);
+    for (let page = 1; page <= pagesForCategory(categoryId); page++) {
+      requests.push(fetchCategoryPage(categoryId, page).then((items) => ({ items, filter })));
     }
   }
 
   const results = await Promise.all(requests);
 
-  for (const { items, keywordGated } of results) {
+  for (const { items, filter } of results) {
     for (const item of items) {
       if (seenHrefs.has(item.href)) continue;
-      if (keywordGated && !isItRelevant(item.title)) continue;
+      if (filter === "keyword" && !isItRelevant(item.title)) continue;
+      if (filter === "sales" && isSalesLike(item.title)) continue;
       seenHrefs.add(item.href);
 
       const haystack = `${item.title} ${item.location ?? ""}`;

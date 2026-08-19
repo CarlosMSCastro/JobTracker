@@ -1,4 +1,4 @@
-import { classifyArea, hasAiSignal } from "./relevance";
+import { classifyArea, detectRemoteType, hasAiSignal } from "./relevance";
 import type { Fetcher, NormalizedJob } from "./types";
 
 type TeamlyzerJob = {
@@ -55,7 +55,8 @@ export const fetchTeamlyzer: Fetcher = async () => {
       seen.add(job.identifier);
 
       const skills = job.skills ?? [];
-      const haystack = `${job.title} ${job.occupationalCategory ?? ""} ${skills.join(" ")}`;
+      const location = job.jobLocation?.address?.addressLocality;
+      const haystack = `${job.title} ${job.occupationalCategory ?? ""} ${skills.join(" ")} ${location ?? ""}`;
       const tags = [...skills];
       if (hasAiSignal(haystack) && !tags.includes("AI")) tags.push("AI");
 
@@ -63,7 +64,8 @@ export const fetchTeamlyzer: Fetcher = async () => {
         externalId: job.identifier,
         title: job.title,
         company: job.hiringOrganization?.name ?? "Desconhecida",
-        location: job.jobLocation?.address?.addressLocality,
+        location,
+        remoteType: detectRemoteType(haystack),
         country: "Portugal",
         area: classifyArea(haystack),
         tags,

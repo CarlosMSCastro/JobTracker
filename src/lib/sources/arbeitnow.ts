@@ -1,4 +1,4 @@
-import { classifyArea, detectRemoteType, hasAiSignal, isItRelevant } from "./relevance";
+import { classifyArea, detectRemoteType, hasAiSignal, isItRelevant, isPortugalLocation } from "./relevance";
 import type { Fetcher, NormalizedJob } from "./types";
 
 type ArbeitnowJob = {
@@ -28,6 +28,12 @@ export const fetchArbeitnow: Fetcher = async () => {
     const haystack = `${job.title} ${job.tags?.join(" ") ?? ""} ${job.job_types?.join(" ") ?? ""}`;
     if (!isItRelevant(haystack)) continue;
 
+    const remoteType = job.remote ? "REMOTO" : detectRemoteType(haystack);
+
+    // Arbeitnow não indica país e é dominado por vagas na Alemanha/Reino Unido — uma vaga presencial
+    // ou híbrida noutro país não serve para nada aqui; remoto passa sempre (não exige mudança).
+    if (remoteType !== "REMOTO" && !isPortugalLocation(job.location ?? "")) continue;
+
     const tags = job.tags ?? [];
     if (hasAiSignal(haystack) && !tags.includes("AI")) tags.push("AI");
 
@@ -36,7 +42,8 @@ export const fetchArbeitnow: Fetcher = async () => {
       title: job.title,
       company: job.company_name,
       location: job.location,
-      remoteType: job.remote ? "REMOTO" : detectRemoteType(haystack),
+      remoteType,
+      country: isPortugalLocation(job.location ?? "") ? "Portugal" : undefined,
       area: classifyArea(haystack),
       tags,
       url: job.url,

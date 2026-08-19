@@ -40,12 +40,15 @@ const REMOTE_OPTIONS = [
 
 const COUNTRY_OPTIONS = [{ value: "Portugal", label: "Portugal" }];
 
+const REGION_OPTIONS = [{ value: "norte", label: "Norte (Porto/Braga/Guimarães)" }];
+
 const STATUS_OPTIONS = Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }));
 
 const EMPTY_FILTERS = {
   area: [] as string[],
   remoteType: [] as string[],
   country: [] as string[],
+  region: [] as string[],
   sourceId: [] as string[],
   status: [] as string[],
   isInternship: false,
@@ -54,6 +57,8 @@ const EMPTY_FILTERS = {
 };
 
 type Filters = typeof EMPTY_FILTERS;
+
+const FILTERS_STORAGE_KEY = "job-tracker:filters";
 
 function daysAgoIso(days: number) {
   const d = new Date();
@@ -67,6 +72,7 @@ function toggle(list: string[], value: string): string[] {
 
 export function JobsDashboard() {
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [filtersLoaded, setFiltersLoaded] = useState(false);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [total, setTotal] = useState(0);
   const [sources, setSources] = useState<Source[]>([]);
@@ -80,6 +86,24 @@ export function JobsDashboard() {
       .then((data) => setSources(data.sources ?? []));
   }, []);
 
+  // Carrega os filtros guardados do browser (localStorage) na primeira renderização — feito num
+  // efeito, não no useState inicial, para o HTML do servidor e do cliente baterem certo no
+  // primeiro render (o servidor nunca tem acesso ao localStorage do utilizador).
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(FILTERS_STORAGE_KEY);
+      if (raw) setFilters((f) => ({ ...f, ...JSON.parse(raw) }));
+    } catch {
+      // localStorage indisponível ou JSON inválido — ignora e segue com os filtros vazios
+    }
+    setFiltersLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!filtersLoaded) return;
+    localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters));
+  }, [filters, filtersLoaded]);
+
   const sourceOptions = useMemo(() => sources.map((s) => ({ value: s.id, label: s.name })), [sources]);
 
   const query = useMemo(() => {
@@ -87,6 +111,7 @@ export function JobsDashboard() {
     filters.area.forEach((v) => params.append("area", v));
     filters.remoteType.forEach((v) => params.append("remoteType", v));
     filters.country.forEach((v) => params.append("country", v));
+    filters.region.forEach((v) => params.append("region", v));
     filters.sourceId.forEach((v) => params.append("sourceId", v));
     filters.status.forEach((v) => params.append("status", v));
     if (filters.isInternship) params.set("isInternship", "true");
@@ -107,9 +132,10 @@ export function JobsDashboard() {
   }, [query]);
 
   useEffect(() => {
+    if (!filtersLoaded) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-filter-change needs a loading flag
     loadJobs();
-  }, [loadJobs]);
+  }, [loadJobs, filtersLoaded]);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -210,6 +236,12 @@ export function JobsDashboard() {
             options={COUNTRY_OPTIONS}
             selected={filters.country}
             onChange={(v) => setFilters((f) => ({ ...f, country: v }))}
+          />
+          <CheckboxGroup
+            label="Zona"
+            options={REGION_OPTIONS}
+            selected={filters.region}
+            onChange={(v) => setFilters((f) => ({ ...f, region: v }))}
           />
           <CheckboxGroup
             label="Fonte"
