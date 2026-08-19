@@ -1,0 +1,68 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { STATUS_COLORS, STATUS_LABELS } from "@/lib/labels";
+
+type Job = {
+  id: string;
+  title: string;
+  company: string;
+  status: string;
+  publishedAt: string | null;
+  updatedAt: string;
+  source: { name: string };
+};
+
+const APPLICATION_STATUSES = ["APLICADA", "ENTREVISTA", "OFERTA", "REJEITADA", "DESISTI"];
+
+export function ApplicationsList() {
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all(APPLICATION_STATUSES.map((status) => fetch(`/api/jobs?status=${status}`).then((r) => r.json())))
+      .then((results) => {
+        const all = results.flatMap((r) => r.jobs ?? []) as Job[];
+        all.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+        setJobs(all);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <h1 className="text-xl font-semibold text-neutral-100">Candidaturas</h1>
+      <div className="flex flex-col divide-y divide-neutral-800 rounded-lg border border-neutral-800 bg-neutral-900/40">
+        {loading && <p className="p-4 text-sm text-neutral-500">A carregar...</p>}
+        {!loading && jobs.length === 0 && (
+          <p className="p-4 text-sm text-neutral-500">
+            Ainda não marcaste nenhuma vaga como aplicada. Muda o estado de uma vaga na lista principal.
+          </p>
+        )}
+        {jobs.map((job) => (
+          <Link
+            key={job.id}
+            href={`/vagas/${job.id}`}
+            className="flex items-center justify-between gap-4 p-4 transition-colors hover:bg-neutral-900/60"
+          >
+            <div>
+              <p className="font-medium text-neutral-100">{job.title}</p>
+              <p className="text-sm text-neutral-400">
+                {job.company} · {job.source.name}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-neutral-500">
+                atualizado {new Date(job.updatedAt).toLocaleDateString("pt-PT")}
+              </span>
+              <span className={`rounded px-2 py-1 text-xs font-medium ${STATUS_COLORS[job.status]}`}>
+                {STATUS_LABELS[job.status]}
+              </span>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}

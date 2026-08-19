@@ -1,0 +1,85 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum SourceType {
+  API
+  RSS
+  MANUAL
+  SCRAPER
+}
+
+enum RemoteType {
+  REMOTO
+  PRESENCIAL
+  HIBRIDO
+}
+
+enum JobStatus {
+  NOVA
+  VISTA
+  APLICADA
+  ENTREVISTA
+  REJEITADA
+  OFERTA
+  DESISTI
+}
+
+model Source {
+  id           String     @id @default(cuid())
+  name         String     @unique
+  type         SourceType
+  area         String?
+  active       Boolean    @default(true)
+  config       String? // JSON serializado: chaves de API, URL base, seletores de scraping, etc.
+  lastFetch    DateTime?
+  requestCount Int        @default(0) // pedidos já gastos contra requestLimit (ex: quota vitalícia da Jooble)
+  requestLimit Int?
+  jobs         Job[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Job {
+  id            String        @id @default(cuid())
+  sourceId      String
+  source        Source        @relation(fields: [sourceId], references: [id])
+  externalId    String?
+  title         String
+  company       String
+  location      String?
+  remoteType    RemoteType?
+  country       String?
+  area          String
+  tags          String? // lista separada por vírgulas: "AI,Python,React"
+  isInternship  Boolean       @default(false)
+  url           String        @unique
+  publishedAt   DateTime?
+  fetchedAt     DateTime      @default(now())
+  status        JobStatus     @default(NOVA)
+  notes         String?
+  statusHistory StatusEvent[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([company, title])
+  @@index([publishedAt])
+  @@index([status])
+}
+
+model StatusEvent {
+  id        String    @id @default(cuid())
+  jobId     String
+  job       Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  status    JobStatus
+  note      String?
+  changedAt DateTime  @default(now())
+}
