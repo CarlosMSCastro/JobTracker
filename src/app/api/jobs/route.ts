@@ -38,10 +38,14 @@ export async function GET(request: NextRequest) {
   const region = params.getAll("region");
   if (region.includes("norte")) {
     // Remoto passa sempre (não exige estar na zona); presencial/híbrido só entra se a localização
-    // bater com um concelho do Grande Porto/Braga/Guimarães.
+    // bater com um concelho do Grande Porto/Braga/Guimarães — ou se a fonte não deu localização
+    // nenhuma (null) ou disse "Todas as Zonas" (ITJobs.pt/Net-Empregos para "a nível nacional").
+    // Sem isto, estas vagas desapareciam sempre que se ligava o filtro, mesmo podendo ser relevantes.
     and.push({
       OR: [
         { remoteType: "REMOTO" },
+        { location: null },
+        { location: { contains: "Todas as Zonas" } },
         ...NORTE_REGION_KEYWORDS.map((kw) => ({
           location: { contains: kw, mode: "insensitive" as const },
         })),
