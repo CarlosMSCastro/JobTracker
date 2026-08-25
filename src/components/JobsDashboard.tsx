@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { DATE_PRESETS, REMOTE_LABELS, STATUS_COLORS, STATUS_LABELS } from "@/lib/labels";
 
@@ -73,9 +73,12 @@ function toggle(list: string[], value: string): string[] {
 export function JobsDashboard() {
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [filtersLoaded, setFiltersLoaded] = useState(false);
+  const [hasSavedFilters, setHasSavedFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [total, setTotal] = useState(0);
   const [sources, setSources] = useState<Source[]>([]);
+  const [sourcesLoaded, setSourcesLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
@@ -83,21 +86,51 @@ export function JobsDashboard() {
   useEffect(() => {
     fetch("/api/sources")
       .then((r) => r.json())
-      .then((data) => setSources(data.sources ?? []));
+      .then((data) => {
+        setSources(data.sources ?? []);
+        setSourcesLoaded(true);
+      });
   }, []);
 
   // Carrega os filtros guardados do browser (localStorage) na primeira renderização — feito num
   // efeito, não no useState inicial, para o HTML do servidor e do cliente baterem certo no
   // primeiro render (o servidor nunca tem acesso ao localStorage do utilizador).
+  // Numa visita nova (sem nada guardado), começa com tudo marcado: uma categoria sem nada
+  // selecionado passa a significar "não mostres nada", por isso o estado inicial não pode ser vazio.
   useEffect(() => {
     try {
       const raw = localStorage.getItem(FILTERS_STORAGE_KEY);
-      if (raw) setFilters((f) => ({ ...f, ...JSON.parse(raw) }));
+      const saved = raw ? JSON.parse(raw) : null;
+      // Filtros de antes desta alteração guardavam "tudo vazio" a significar "sem filtro" — com a
+      // nova regra isso passaria a bloquear a lista para sempre, por isso migra esse estado antigo
+      // para o novo default (tudo marcado) em vez de o respeitar à letra.
+      const isPreMigration =
+        saved && saved.area?.length === 0 && saved.remoteType?.length === 0 && saved.status?.length === 0;
+      if (saved && !isPreMigration) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- lê do localStorage, só corre uma vez ao montar
+        setFilters((f) => ({ ...f, ...saved }));
+        setHasSavedFilters(true);
+      } else {
+        setFilters((f) => ({
+          ...f,
+          ...(saved ?? {}),
+          area: AREA_OPTIONS.map((o) => o.value),
+          remoteType: REMOTE_OPTIONS.map((o) => o.value),
+          status: STATUS_OPTIONS.map((o) => o.value),
+        }));
+      }
     } catch {
       // localStorage indisponível ou JSON inválido — ignora e segue com os filtros vazios
     }
     setFiltersLoaded(true);
   }, []);
+
+  // As fontes só chegam depois de um pedido à API — só aí é que dá para marcar "todas" por defeito.
+  useEffect(() => {
+    if (!sourcesLoaded || !filtersLoaded || hasSavedFilters) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- espera as fontes chegarem da API para as marcar todas
+    setFilters((f) => ({ ...f, sourceId: sources.map((s) => s.id) }));
+  }, [sourcesLoaded, filtersLoaded, hasSavedFilters, sources]);
 
   useEffect(() => {
     if (!filtersLoaded) return;
@@ -120,22 +153,61 @@ export function JobsDashboard() {
     return params.toString();
   }, [filters]);
 
+  // Uma categoria (Área/Modalidade/Estado/Fonte) sem nada marcado não deve devolver "tudo" — deve
+  // devolver nada, para forçar a escolher pelo menos uma opção em cada uma.
+  const blockedByEmptyCategory =
+    filters.area.length === 0 ||
+    filters.remoteType.length === 0 ||
+    filters.status.length === 0 ||
+    (sourcesLoaded && sources.length > 0 && filters.sourceId.length === 0);
+
+  // Filtros mudam depressa (vários cliques seguidos) e podem disparar vários pedidos a
+  // sobrepor-se — o requestId garante que só a resposta do pedido mais recente é aplicada,
+  // para uma resposta lenta e antiga nunca sobrepor o resultado de um filtro já mudado.
+  const requestIdRef = useRef(0);
+
   const loadJobs = useCallback(() => {
+    const requestId = ++requestIdRef.current;
+    if (blockedByEmptyCategory) {
+      setJobs([]);
+      setTotal(0);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     fetch(`/api/jobs?${query}`)
       .then((r) => r.json())
       .then((data) => {
+        if (requestId !== requestIdRef.current) return;
         setJobs(data.jobs ?? []);
         setTotal(data.total ?? 0);
       })
-      .finally(() => setLoading(false));
-  }, [query]);
+      .finally(() => {
+        if (requestId === requestIdRef.current) setLoading(false);
+      });
+  }, [query, blockedByEmptyCategory]);
 
   useEffect(() => {
     if (!filtersLoaded) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-filter-change needs a loading flag
     loadJobs();
   }, [loadJobs, filtersLoaded]);
+
+  // Trata a vaga numa aba nova (ex: clica em "Abrir" ou no título com ctrl+click), muda lá o
+  // estado e fecha a aba — ao voltar a esta aba, refaz o pedido automaticamente em vez de
+  // obrigar a um refresh manual.
+  useEffect(() => {
+    if (!filtersLoaded) return;
+    function handleVisible() {
+      if (document.visibilityState === "visible") loadJobs();
+    }
+    document.addEventListener("visibilitychange", handleVisible);
+    window.addEventListener("focus", handleVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisible);
+      window.removeEventListener("focus", handleVisible);
+    };
+  }, [filtersLoaded, loadJobs]);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -208,6 +280,12 @@ export function JobsDashboard() {
               </option>
             ))}
           </select>
+          <button
+            onClick={() => setShowFilters((s) => !s)}
+            className="rounded-md border border-neutral-800 px-2 py-1.5 text-sm text-neutral-400 hover:text-neutral-200"
+          >
+            {showFilters ? "Esconder filtros" : "+ Filtros"}
+          </button>
           {filtersActive && (
             <button
               onClick={() => setFilters(EMPTY_FILTERS)}
@@ -218,61 +296,68 @@ export function JobsDashboard() {
           )}
         </div>
 
-        <div className="flex flex-wrap gap-4 border-t border-neutral-800 pt-3">
-          <CheckboxGroup
-            label="Área"
-            options={AREA_OPTIONS}
-            selected={filters.area}
-            onChange={(v) => setFilters((f) => ({ ...f, area: v }))}
-          />
-          <CheckboxGroup
-            label="Modalidade"
-            options={REMOTE_OPTIONS}
-            selected={filters.remoteType}
-            onChange={(v) => setFilters((f) => ({ ...f, remoteType: v }))}
-          />
-          <CheckboxGroup
-            label="País"
-            options={COUNTRY_OPTIONS}
-            selected={filters.country}
-            onChange={(v) => setFilters((f) => ({ ...f, country: v }))}
-          />
-          <CheckboxGroup
-            label="Zona"
-            options={REGION_OPTIONS}
-            selected={filters.region}
-            onChange={(v) => setFilters((f) => ({ ...f, region: v }))}
-          />
-          <CheckboxGroup
-            label="Fonte"
-            options={sourceOptions}
-            selected={filters.sourceId}
-            onChange={(v) => setFilters((f) => ({ ...f, sourceId: v }))}
-          />
-          <CheckboxGroup
-            label="Estado"
-            options={STATUS_OPTIONS}
-            selected={filters.status}
-            onChange={(v) => setFilters((f) => ({ ...f, status: v }))}
-          />
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">Estágio</span>
-            <label className="flex items-center gap-1.5 text-sm text-neutral-300">
-              <input
-                type="checkbox"
-                checked={filters.isInternship}
-                onChange={(e) => setFilters((f) => ({ ...f, isInternship: e.target.checked }))}
-                className="accent-indigo-500"
-              />
-              Só estágios
-            </label>
+        {showFilters && (
+          <div className="flex flex-wrap gap-4 border-t border-neutral-800 pt-3">
+            <CheckboxGroup
+              label="Área"
+              options={AREA_OPTIONS}
+              selected={filters.area}
+              onChange={(v) => setFilters((f) => ({ ...f, area: v }))}
+            />
+            <CheckboxGroup
+              label="Modalidade"
+              options={REMOTE_OPTIONS}
+              selected={filters.remoteType}
+              onChange={(v) => setFilters((f) => ({ ...f, remoteType: v }))}
+            />
+            <CheckboxGroup
+              label="País"
+              options={COUNTRY_OPTIONS}
+              selected={filters.country}
+              onChange={(v) => setFilters((f) => ({ ...f, country: v }))}
+            />
+            <CheckboxGroup
+              label="Zona"
+              options={REGION_OPTIONS}
+              selected={filters.region}
+              onChange={(v) => setFilters((f) => ({ ...f, region: v }))}
+            />
+            <CheckboxGroup
+              label="Fonte"
+              options={sourceOptions}
+              selected={filters.sourceId}
+              onChange={(v) => setFilters((f) => ({ ...f, sourceId: v }))}
+            />
+            <CheckboxGroup
+              label="Estado"
+              options={STATUS_OPTIONS}
+              selected={filters.status}
+              onChange={(v) => setFilters((f) => ({ ...f, status: v }))}
+            />
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">Estágio</span>
+              <label className="flex items-center gap-1.5 text-sm text-neutral-300">
+                <input
+                  type="checkbox"
+                  checked={filters.isInternship}
+                  onChange={(e) => setFilters((f) => ({ ...f, isInternship: e.target.checked }))}
+                  className="accent-indigo-500"
+                />
+                Só estágios
+              </label>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <div className="flex flex-col divide-y divide-neutral-800 rounded-lg border border-neutral-800 bg-neutral-900/40">
         {loading && <p className="p-4 text-sm text-neutral-500">A carregar...</p>}
-        {!loading && jobs.length === 0 && (
+        {!loading && jobs.length === 0 && blockedByEmptyCategory && (
+          <p className="p-4 text-sm text-neutral-500">
+            Seleciona pelo menos uma opção em Área, Modalidade, Fonte e Estado para ver vagas.
+          </p>
+        )}
+        {!loading && jobs.length === 0 && !blockedByEmptyCategory && (
           <p className="p-4 text-sm text-neutral-500">Sem vagas para estes filtros.</p>
         )}
         {jobs.map((job) => (
