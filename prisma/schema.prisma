@@ -66,6 +66,7 @@ model Job {
   fetchedAt     DateTime      @default(now())
   status        JobStatus     @default(NOVA)
   notes         String?
+  applicationText String? // texto realmente enviado na candidatura — corpo do email ou o que foi colado numa caixa de texto do site
   statusHistory StatusEvent[]
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt

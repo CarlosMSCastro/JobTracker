@@ -21,7 +21,12 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const body = (await request.json()) as { status?: JobStatus; notes?: string; note?: string };
+  const body = (await request.json()) as {
+    status?: JobStatus;
+    notes?: string;
+    note?: string;
+    applicationText?: string;
+  };
 
   const job = await prisma.job.findUnique({ where: { id } });
   if (!job) {
@@ -33,6 +38,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     data: {
       ...(body.status ? { status: body.status } : {}),
       ...(body.notes !== undefined ? { notes: body.notes } : {}),
+      ...(body.applicationText !== undefined ? { applicationText: body.applicationText } : {}),
     },
   });
 
