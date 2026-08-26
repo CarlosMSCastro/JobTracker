@@ -87,6 +87,22 @@ const sources = [
     config: JSON.stringify({ fetcherKey: "teamlyzer" }),
   },
   {
+    name: "Empregos.org",
+    type: "SCRAPER" as const,
+    area: "Dev/TI",
+    active: true,
+    config: JSON.stringify({ fetcherKey: "empregos" }),
+  },
+  {
+    name: "Indeed",
+    type: "SCRAPER" as const,
+    area: "Dev/TI",
+    // Só a 1ª página de cada pesquisa é acessível sem login — sujeito a bloqueios pontuais do
+    // Cloudflare/Indeed; ver src/lib/sources/indeed.ts. Falhas ficam visíveis na página de Fontes.
+    active: true,
+    config: JSON.stringify({ fetcherKey: "indeed" }),
+  },
+  {
     name: "LinkedIn (manual)",
     type: "MANUAL" as const,
     area: null,

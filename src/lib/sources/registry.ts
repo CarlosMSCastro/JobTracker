@@ -1,5 +1,7 @@
 import { fetchArbeitnow } from "./arbeitnow";
+import { fetchEmpregosOrg } from "./empregos";
 import { fetchExpressoEmprego } from "./expressoemprego";
+import { fetchIndeed } from "./indeed";
 import { fetchItJobs } from "./itjobs";
 import { fetchJobicy } from "./jobicy";
 import { fetchJooble } from "./jooble";
@@ -17,6 +19,8 @@ export const FETCHERS: Record<string, Fetcher> = {
   arbeitnow: fetchArbeitnow,
   jooble: fetchJooble,
   netempregos: fetchNetEmpregos,
+  empregos: fetchEmpregosOrg,
+  indeed: fetchIndeed,
   remoteok: fetchRemoteOk,
   jobicy: fetchJobicy,
   weworkremotely: fetchWeWorkRemotely,
