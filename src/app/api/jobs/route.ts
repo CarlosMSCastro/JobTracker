@@ -26,6 +26,11 @@ export async function GET(request: NextRequest) {
   const isInternship = params.get("isInternship");
   if (isInternship !== null) where.isInternship = isInternship === "true";
 
+  // Vagas auto-descartadas (ver autoExcludeReason) ficam escondidas por omissão — nunca apagadas,
+  // só recuperáveis passando includeAutoExcluded=true (toggle "mostrar descartadas automaticamente").
+  const includeAutoExcluded = params.get("includeAutoExcluded") === "true";
+  if (!includeAutoExcluded) where.autoExcluded = false;
+
   const and: Prisma.JobWhereInput[] = [];
 
   const q = params.get("q");

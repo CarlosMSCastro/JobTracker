@@ -137,8 +137,9 @@ const SALES_KEYWORDS = [
 ];
 
 // Vagas "Senior" — pedido explícito do utilizador para excluir sempre, independente da área/fonte.
-// Cobre PT e EN, incluindo a abreviatura "sr." (com ponto, para não apanhar "sra"/"srta").
-const SENIOR_KEYWORDS = ["senior", "sénior", "sr."];
+// Cobre PT e EN, incluindo a abreviatura "sr." (com ponto, para não apanhar "sra"/"srta"). Não inclui
+// "manager" sozinho porque colide com "office manager", já aceite em ADMIN_KEYWORDS.
+const SENIOR_KEYWORDS = ["senior", "sénior", "sr.", "principal", "staff", "director", "diretor", "diretora", "lead"];
 
 export const AI_KEYWORDS = ["ai", "machine learning", "inteligência artificial", "llm", "generative ai", "ml engineer"];
 
@@ -292,4 +293,43 @@ export function detectRemoteType(text: string): "REMOTO" | "HIBRIDO" | "PRESENCI
   if (matchesAny(haystack, REMOTE_KEYWORDS)) return "REMOTO";
   if (matchesAny(haystack, HYBRID_KEYWORDS)) return "HIBRIDO";
   return "PRESENCIAL";
+}
+
+// Sinais desqualificantes que só aparecem no texto completo da página de destino, não no
+// título/snippet curto que as fontes já trazem — padrões recolhidos das notas manuais do
+// utilizador em vagas que já tinha descartado (ver memória "project_auto_discard_feature").
+// Usado por src/lib/sources/autodiscard.ts depois de ir buscar a página.
+// Cobre as duas ordens comuns ("6 years of experience...", "professional experience (3+ years)...")
+// com um intervalo limitado (sem cruzar frases, por isso corta em ".") para apanhar palavras pelo
+// meio ("years of hands-on experience") sem colar números e "experiência" que não têm nada a ver.
+const YEARS_THEN_EXPERIENCE_RE = /(\d+)\+?\s*(anos|years?)[^.]{0,40}?(experi[êe]ncia|experience)/i;
+const EXPERIENCE_THEN_YEARS_RE = /(experi[êe]ncia|experience)[^.]{0,40}?(\d+)\+?\s*(anos|years?)/i;
+const MIN_YEARS_TO_EXCLUDE = 3;
+
+const US_ONLY_KEYWORDS = ["usa only", "us only", "usa based only", "us based only", "united states only"];
+
+// Cirílico (russo, ucraniano, etc.) — nenhuma vaga legítima em PT/EN contém estes carateres.
+const CYRILLIC_RE = /[Ѐ-ӿ]/;
+
+function extractYearsRequirement(text: string): number | null {
+  const m1 = YEARS_THEN_EXPERIENCE_RE.exec(text);
+  if (m1) return Number(m1[1]);
+  const m2 = EXPERIENCE_THEN_YEARS_RE.exec(text);
+  if (m2) return Number(m2[2]);
+  return null;
+}
+
+export function checkAutoDiscardReason(text: string): string | null {
+  if (CYRILLIC_RE.test(text)) {
+    return "Página não está em português/inglês (carateres cirílicos detetados)";
+  }
+
+  const haystack = text.toLowerCase();
+  const usOnly = US_ONLY_KEYWORDS.find((kw) => haystack.includes(kw));
+  if (usOnly) return `Vaga restrita aos EUA ("${usOnly}")`;
+
+  const years = extractYearsRequirement(text);
+  if (years !== null && years >= MIN_YEARS_TO_EXCLUDE) return `Exige ${years}+ anos de experiência`;
+
+  return null;
 }

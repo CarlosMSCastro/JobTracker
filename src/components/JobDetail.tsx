@@ -19,6 +19,8 @@ type Job = {
   url: string;
   publishedAt: string | null;
   status: string;
+  autoExcluded: boolean;
+  autoExcludeReason: string | null;
   notes: string | null;
   applicationText: string | null;
   source: { name: string };
@@ -105,6 +107,11 @@ export function JobDetail({ jobId }: { jobId: string }) {
           <span>Fonte: {job.source.name}</span>
           {job.publishedAt && <span>· Publicada {new Date(job.publishedAt).toLocaleDateString("pt-PT")}</span>}
           {job.isInternship && <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-neutral-300">Estágio</span>}
+          {job.autoExcluded && (
+            <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-amber-300">
+              Auto-descartada{job.autoExcludeReason ? `: ${job.autoExcludeReason}` : ""}
+            </span>
+          )}
           {tags.map((tag) => (
             <span key={tag} className="rounded bg-indigo-500/10 px-1.5 py-0.5 text-indigo-300">
               {tag}

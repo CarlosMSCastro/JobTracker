@@ -1,6 +1,7 @@
 import { prisma } from "./db";
 import { filterNewJobs } from "./dedupe";
 import { FETCHERS } from "./sources/registry";
+import { checkJobPage } from "./sources/autodiscard";
 import { isSeniorTitle } from "./sources/relevance";
 import type { Source } from "@/generated/prisma/client";
 import type { SourceConfig } from "./sources/types";
@@ -68,6 +69,23 @@ async function refreshSource(source: Source): Promise<RefreshSummary> {
         skipDuplicates: true,
       });
       created = result.count;
+
+      // Melhor esforço: vai buscar a página de destino de cada vaga recém-criada e marca
+      // autoExcluded quando encontra um sinal desqualificante no texto completo (ver
+      // src/lib/sources/autodiscard.ts). Uma página bloqueada/indisponível nunca falha o refresh,
+      // só deixa a vaga por verificar.
+      const createdJobs = await prisma.job.findMany({
+        where: { url: { in: newJobs.map((job) => job.url) } },
+        select: { id: true, url: true },
+      });
+      await Promise.all(
+        createdJobs.map(async ({ id, url }) => {
+          const { autoExcluded, reason } = await checkJobPage(url);
+          if (autoExcluded) {
+            await prisma.job.update({ where: { id }, data: { autoExcluded, autoExcludeReason: reason } });
+          }
+        }),
+      );
     }
     const skipped = jobs.length - created;
 

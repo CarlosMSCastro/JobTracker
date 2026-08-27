@@ -17,6 +17,8 @@ type Job = {
   url: string;
   publishedAt: string | null;
   status: string;
+  autoExcluded: boolean;
+  autoExcludeReason: string | null;
   source: { name: string };
 };
 
@@ -52,6 +54,7 @@ const EMPTY_FILTERS = {
   sourceId: [] as string[],
   status: [] as string[],
   isInternship: false,
+  includeAutoExcluded: false,
   q: "",
   datePreset: "",
 };
@@ -115,6 +118,7 @@ export function JobsDashboard() {
     filters.sourceId.forEach((v) => params.append("sourceId", v));
     filters.status.forEach((v) => params.append("status", v));
     if (filters.isInternship) params.set("isInternship", "true");
+    if (filters.includeAutoExcluded) params.set("includeAutoExcluded", "true");
     if (filters.q) params.set("q", filters.q);
     if (filters.datePreset) params.set("dateFrom", daysAgoIso(Number(filters.datePreset)));
     return params.toString();
@@ -267,6 +271,18 @@ export function JobsDashboard() {
               Só estágios
             </label>
           </div>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">Auto-descartadas</span>
+            <label className="flex items-center gap-1.5 text-sm text-neutral-300">
+              <input
+                type="checkbox"
+                checked={filters.includeAutoExcluded}
+                onChange={(e) => setFilters((f) => ({ ...f, includeAutoExcluded: e.target.checked }))}
+                className="accent-indigo-500"
+              />
+              Mostrar descartadas automaticamente
+            </label>
+          </div>
         </div>
       </div>
 
@@ -330,6 +346,14 @@ function JobRow({ job, onQuickStatus }: { job: Job; onQuickStatus: (id: string, 
           {job.isInternship && (
             <span className="shrink-0 rounded bg-neutral-800 px-1.5 py-0.5 text-xs text-neutral-300">
               Estágio
+            </span>
+          )}
+          {job.autoExcluded && (
+            <span
+              title={job.autoExcludeReason ?? undefined}
+              className="shrink-0 rounded bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-300"
+            >
+              Auto-descartada{job.autoExcludeReason ? `: ${job.autoExcludeReason}` : ""}
             </span>
           )}
         </div>
