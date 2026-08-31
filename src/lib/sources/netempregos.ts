@@ -1,3 +1,4 @@
+import Firecrawl from "firecrawl";
 import { classifyArea, detectRemoteType, hasAiSignal, isItRelevant, isSalesLike } from "./relevance";
 import type { Fetcher, NormalizedJob } from "./types";
 
@@ -34,20 +35,10 @@ function pagesForCategory(categoryId: number): number {
 }
 const BASE_URL = "https://www.net-empregos.com";
 
-// Conjunto mais completo de headers (não só User-Agent) — pedidos vindos do IP da Vercel estavam a
-// devolver 0 resultados em produção enquanto localmente funcionavam sempre, o que sugere alguma
-// heurística anti-bot a barrar pedidos "demasiado nus". Referer + Accept*/sec-fetch-* imitam melhor
-// um pedido real de browser a navegar dentro do próprio site.
-const HEADERS = {
-  "User-Agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-  "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.8",
-  Referer: `${BASE_URL}/`,
-  "Sec-Fetch-Dest": "document",
-  "Sec-Fetch-Mode": "navigate",
-  "Sec-Fetch-Site": "same-origin",
-};
+// Via Firecrawl em vez de fetch direto: o net-empregos.com bloqueia pedidos vindos de IPs de
+// datacenter (inclui a Vercel) independentemente dos headers enviados — o Firecrawl faz o pedido
+// a partir da infraestrutura dele, contornando esse bloqueio.
+const firecrawl = new Firecrawl({ apiKey: process.env.FIRECRAWL_API_KEY });
 
 const INTERNSHIP_KEYWORDS = ["estágio", "estagiário", "estagiária", "trainee"];
 
@@ -72,7 +63,10 @@ function parseListingPage(html: string): ScrapedItem[] {
   const chunks = html.split('<div class="job-item media">').slice(1);
 
   for (const chunk of chunks) {
-    const titleMatch = chunk.match(/class="oferta-link"[^>]*href=(\/\d+\/[^>]+?)>([^<]+)<\/a>/);
+    // O Firecrawl serializa o DOM (não os bytes originais do site): href vem sempre entre aspas e
+    // absolutizado (https://www.net-empregos.com/123/...) em vez do relativo sem aspas do HTML
+    // original (href=/123/...) — a captura ignora tudo antes do "/123/" para aceitar os dois casos.
+    const titleMatch = chunk.match(/class="oferta-link"[^>]*href="?[^">]*?(\/\d+\/[^">]+)"?[^>]*>([^<]+)<\/a>/);
     if (!titleMatch) continue;
 
     const dateMatch = chunk.match(/flaticon-calendar"[^>]*><\/i>\s*([^<]+)</);
@@ -91,29 +85,38 @@ function parseListingPage(html: string): ScrapedItem[] {
   return items;
 }
 
-async function fetchCategoryPage(categoryId: number, page: number): Promise<ScrapedItem[]> {
-  const url = `${BASE_URL}/pesquisa-empregos.asp?categoria=${categoryId}&page=${page}`;
-  const res = await fetch(url, { headers: HEADERS });
-  if (!res.ok) return [];
-  const buffer = await res.arrayBuffer();
-  const html = new TextDecoder("iso-8859-1").decode(buffer);
-  return parseListingPage(html);
+function categoryPageUrl(categoryId: number, page: number): string {
+  return `${BASE_URL}/pesquisa-empregos.asp?categoria=${categoryId}&page=${page}`;
 }
 
 export const fetchNetEmpregos: Fetcher = async () => {
   const jobs: NormalizedJob[] = [];
   const seenHrefs = new Set<string>();
 
-  const requests: Promise<{ items: ScrapedItem[]; filter: "none" | "sales" | "keyword" }>[] = [];
-
+  // Um scrape por URL individual (Promise.all) excedia logo o rate limit do plano Firecrawl
+  // (10 pedidos/min) com as 28 páginas deste refresh. batchScrape entrega a lista toda numa só
+  // chamada e o Firecrawl trata do ritmo internamente.
+  const requestUrls: { url: string; filter: "none" | "sales" | "keyword" }[] = [];
   for (const [categoryIdStr, filter] of Object.entries(CATEGORY_FILTER)) {
     const categoryId = Number(categoryIdStr);
     for (let page = 1; page <= pagesForCategory(categoryId); page++) {
-      requests.push(fetchCategoryPage(categoryId, page).then((items) => ({ items, filter })));
+      requestUrls.push({ url: categoryPageUrl(categoryId, page), filter });
     }
   }
+  const filterByUrl = new Map(requestUrls.map(({ url, filter }) => [url, filter]));
 
-  const results = await Promise.all(requests);
+  const job = await firecrawl.batchScrape(
+    requestUrls.map((r) => r.url),
+    { options: { formats: ["rawHtml"] }, pollInterval: 2, timeout: 50 },
+  );
+
+  const results: { items: ScrapedItem[]; filter: "none" | "sales" | "keyword" }[] = [];
+  for (const doc of job.data) {
+    const sourceUrl = doc.metadata?.sourceURL ?? doc.metadata?.url;
+    const filter = sourceUrl ? filterByUrl.get(sourceUrl) : undefined;
+    if (!filter || !doc.rawHtml) continue;
+    results.push({ items: parseListingPage(doc.rawHtml), filter });
+  }
 
   for (const { items, filter } of results) {
     for (const item of items) {

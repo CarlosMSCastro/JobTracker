@@ -58,3 +58,6 @@ skills-lock.json
 
 # CVs pessoais (ficheiros locais, não fazem parte do projeto)
 /cv
+
+.vercel
+.env*
