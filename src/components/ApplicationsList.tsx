@@ -14,7 +14,9 @@ type Job = {
   source: { name: string };
 };
 
-const APPLICATION_STATUSES = ["APLICADA", "ENTREVISTA", "OFERTA", "REJEITADA", "DESISTI"];
+// Desisti fica de fora — é o "não é para mim" usado na triagem em Vagas, nunca uma candidatura
+// real. Mostrar aqui só o que realmente chegou a ser uma candidatura.
+const APPLICATION_STATUSES = ["APLICADA", "ENTREVISTA", "OFERTA", "REJEITADA"];
 
 export function ApplicationsList() {
   const [jobs, setJobs] = useState<Job[]>([]);

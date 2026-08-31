@@ -34,14 +34,11 @@ const REMOTE_OPTIONS = [
   { value: "HIBRIDO", label: "Híbrido" },
 ];
 
-const STATUS_OPTIONS = Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }));
-
 const EMPTY_FILTERS = {
   remoteType: [] as string[],
   region: [] as string[],
   sourceId: [] as string[],
   isInternship: false,
-  includeAutoExcluded: false,
   q: "",
   datePreset: "",
 };
@@ -69,9 +66,6 @@ export function JobsDashboard() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkStatus, setBulkStatus] = useState("DESISTI");
-  const [bulkApplying, setBulkApplying] = useState(false);
 
   useEffect(() => {
     fetch("/api/sources")
@@ -108,7 +102,6 @@ export function JobsDashboard() {
     // página Candidaturas, não aqui. Ver src/components/ApplicationsList.tsx.
     params.set("status", "NOVA");
     if (filters.isInternship) params.set("isInternship", "true");
-    if (filters.includeAutoExcluded) params.set("includeAutoExcluded", "true");
     if (filters.q) params.set("q", filters.q);
     if (filters.datePreset) params.set("dateFrom", daysAgoIso(Number(filters.datePreset)));
     return params.toString();
@@ -121,7 +114,6 @@ export function JobsDashboard() {
       .then((data) => {
         setJobs(data.jobs ?? []);
         setTotal(data.total ?? 0);
-        setSelectedIds(new Set());
       })
       .finally(() => setLoading(false));
   }, [query]);
@@ -165,42 +157,6 @@ export function JobsDashboard() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
-  }
-
-  function toggleSelected(jobId: string) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(jobId)) next.delete(jobId);
-      else next.add(jobId);
-      return next;
-    });
-  }
-
-  function toggleSelectAll() {
-    setSelectedIds((prev) => (prev.size === jobs.length ? new Set() : new Set(jobs.map((j) => j.id))));
-  }
-
-  async function applyBulkStatus() {
-    const ids = [...selectedIds];
-    if (ids.length === 0) return;
-    setBulkApplying(true);
-    if (bulkStatus === "NOVA") {
-      setJobs((prev) => prev.map((j) => (selectedIds.has(j.id) ? { ...j, status: bulkStatus } : j)));
-    } else {
-      setJobs((prev) => prev.filter((j) => !selectedIds.has(j.id)));
-      setTotal((t) => Math.max(0, t - ids.length));
-    }
-    await Promise.all(
-      ids.map((jobId) =>
-        fetch(`/api/jobs/${jobId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: bulkStatus }),
-        }),
-      ),
-    );
-    setSelectedIds(new Set());
-    setBulkApplying(false);
   }
 
   const filtersActive = JSON.stringify(filters) !== JSON.stringify(EMPTY_FILTERS);
@@ -292,17 +248,6 @@ export function JobsDashboard() {
         >
           Estágio
         </button>
-        <button
-          type="button"
-          onClick={() => setFilters((f) => ({ ...f, includeAutoExcluded: !f.includeAutoExcluded }))}
-          className={`${CHIP_CLASS} ${
-            filters.includeAutoExcluded
-              ? "border-accent bg-tag-bg text-accent"
-              : "border-border bg-surface text-foreground"
-          }`}
-        >
-          Auto-descartadas
-        </button>
         <select
           value={filters.datePreset}
           onChange={(e) => setFilters((f) => ({ ...f, datePreset: e.target.value }))}
@@ -325,57 +270,10 @@ export function JobsDashboard() {
       </div>
 
       <div className="flex flex-col divide-y divide-border rounded-lg border border-border bg-surface">
-        {jobs.length > 0 && (
-          <div className="flex flex-wrap items-center gap-3 border-b border-border bg-background/60 p-2.5">
-            <label className="flex items-center gap-1.5 text-xs text-muted">
-              <input
-                type="checkbox"
-                checked={selectedIds.size > 0 && selectedIds.size === jobs.length}
-                onChange={toggleSelectAll}
-                className="accent-accent"
-              />
-              {selectedIds.size > 0 ? `${selectedIds.size} selecionada(s)` : "Selecionar tudo"}
-            </label>
-            {selectedIds.size > 0 && (
-              <div className="ml-auto flex items-center gap-2">
-                <select
-                  value={bulkStatus}
-                  onChange={(e) => setBulkStatus(e.target.value)}
-                  className={FIELD_CLASS}
-                >
-                  {STATUS_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={applyBulkStatus}
-                  disabled={bulkApplying}
-                  className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-ink hover:opacity-90 disabled:opacity-50"
-                >
-                  {bulkApplying ? "A aplicar..." : "Aplicar"}
-                </button>
-                <button
-                  onClick={() => setSelectedIds(new Set())}
-                  className="rounded-md px-2 py-1.5 text-sm text-muted hover:text-foreground"
-                >
-                  Cancelar
-                </button>
-              </div>
-            )}
-          </div>
-        )}
         {loading && <p className="p-4 text-sm text-muted">A carregar...</p>}
         {!loading && jobs.length === 0 && <p className="p-4 text-sm text-muted">Sem vagas para estes filtros.</p>}
         {jobs.map((job) => (
-          <JobRow
-            key={job.id}
-            job={job}
-            onQuickStatus={quickSetStatus}
-            selected={selectedIds.has(job.id)}
-            onToggleSelect={toggleSelected}
-          />
+          <JobRow key={job.id} job={job} onQuickStatus={quickSetStatus} />
         ))}
       </div>
     </div>
@@ -421,82 +319,54 @@ function FilterDropdown({
   );
 }
 
-function JobRow({
-  job,
-  onQuickStatus,
-  selected,
-  onToggleSelect,
-}: {
-  job: Job;
-  onQuickStatus: (id: string, status: string) => void;
-  selected: boolean;
-  onToggleSelect: (id: string) => void;
-}) {
-  const tags = job.tags ? job.tags.split(",").filter(Boolean) : [];
-
+function JobRow({ job, onQuickStatus }: { job: Job; onQuickStatus: (id: string, status: string) => void }) {
   return (
-    <div className="flex items-start justify-between gap-4 p-4 transition-colors hover:bg-background/40">
-      <input
-        type="checkbox"
-        checked={selected}
-        onChange={() => onToggleSelect(job.id)}
-        className="mt-1 shrink-0 accent-accent"
-      />
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex items-center gap-2">
-          <Link href={`/vagas/${job.id}`} className="truncate font-medium text-foreground hover:text-accent hover:underline">
+    <div className="flex items-center gap-2 px-4 py-2.5 transition-colors hover:bg-background/40">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm">
+          <Link href={`/vagas/${job.id}`} className="font-medium text-foreground hover:text-accent hover:underline">
             {job.title}
           </Link>
-          {job.isInternship && (
-            <span className="shrink-0 rounded border border-border bg-background px-1.5 py-0.5 text-xs text-muted">
-              Estágio
-            </span>
-          )}
-          {job.autoExcluded && (
-            <span
-              title={job.autoExcludeReason ?? undefined}
-              className="shrink-0 rounded border border-warn-text/30 bg-warn-bg px-1.5 py-0.5 text-xs text-warn-text"
-            >
-              Auto-descartada{job.autoExcludeReason ? `: ${job.autoExcludeReason}` : ""}
-            </span>
-          )}
-        </div>
-        <p className="text-sm text-muted">
+        </p>
+        <p className="truncate text-xs text-muted">
           {job.company}
           {job.location ? ` · ${job.location}` : ""}
-          {job.remoteType ? ` · ${REMOTE_LABELS[job.remoteType]}` : ""}
+          {job.remoteType ? ` · ${REMOTE_LABELS[job.remoteType]}` : ""} · {job.source.name}
+          {job.publishedAt ? ` · ${new Date(job.publishedAt).toLocaleDateString("pt-PT")}` : ""}
         </p>
-        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
-          <span>{job.source.name}</span>
-          {job.publishedAt && <span>· {new Date(job.publishedAt).toLocaleDateString("pt-PT")}</span>}
-          {tags.map((tag) => (
-            <span key={tag} className="rounded bg-tag-bg px-1.5 py-0.5 text-tag-text">
-              {tag}
-            </span>
-          ))}
-        </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <select
-          value={job.status}
-          onChange={(e) => onQuickStatus(job.id, e.target.value)}
-          className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${STATUS_COLORS[job.status]}`}
+      {job.isInternship && (
+        <span className="shrink-0 rounded border border-border bg-background px-1.5 py-0.5 text-xs text-muted">
+          Estágio
+        </span>
+      )}
+      {job.autoExcluded && (
+        <span
+          title={job.autoExcludeReason ?? undefined}
+          className="shrink-0 rounded border border-warn-text/30 bg-warn-bg px-1.5 py-0.5 text-xs text-warn-text"
         >
-          {Object.entries(STATUS_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <a
-          href={job.url}
-          target="_blank"
-          rel="noreferrer"
-          className="rounded-md border border-border px-2 py-1 text-xs text-foreground hover:bg-background"
-        >
-          Abrir
-        </a>
-      </div>
+          Auto-descartada
+        </span>
+      )}
+      <select
+        value={job.status}
+        onChange={(e) => onQuickStatus(job.id, e.target.value)}
+        className={`shrink-0 rounded-md border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${STATUS_COLORS[job.status]}`}
+      >
+        {Object.entries(STATUS_LABELS).map(([value, label]) => (
+          <option key={value} value={value}>
+            {label}
+          </option>
+        ))}
+      </select>
+      <a
+        href={job.url}
+        target="_blank"
+        rel="noreferrer"
+        className="shrink-0 rounded-md border border-border px-2 py-1 text-xs text-foreground hover:bg-background"
+      >
+        Abrir
+      </a>
     </div>
   );
 }
