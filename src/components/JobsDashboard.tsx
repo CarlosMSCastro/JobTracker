@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { DATE_PRESETS, REMOTE_LABELS, STATUS_COLORS, STATUS_LABELS } from "@/lib/labels";
 
@@ -10,8 +10,6 @@ type Job = {
   company: string;
   location: string | null;
   remoteType: string | null;
-  country: string | null;
-  area: string;
   tags: string | null;
   isInternship: boolean;
   url: string;
@@ -25,14 +23,10 @@ type Job = {
 type Source = { id: string; name: string; active: boolean };
 
 const FIELD_CLASS =
-  "rounded-md border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100 placeholder:text-neutral-500 focus:border-indigo-500 focus:outline-none";
+  "rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none";
 
-const AREA_OPTIONS = [
-  { value: "Dev/TI", label: "Dev/TI" },
-  { value: "Helpdesk", label: "Helpdesk" },
-  { value: "Backoffice", label: "Backoffice" },
-  { value: "Admin", label: "Admin" },
-];
+const CHIP_CLASS =
+  "inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border px-3 py-1.5 text-sm transition-colors";
 
 const REMOTE_OPTIONS = [
   { value: "REMOTO", label: "Remoto" },
@@ -40,19 +34,12 @@ const REMOTE_OPTIONS = [
   { value: "HIBRIDO", label: "Híbrido" },
 ];
 
-const COUNTRY_OPTIONS = [{ value: "Portugal", label: "Portugal" }];
-
-const REGION_OPTIONS = [{ value: "norte", label: "Norte (Porto/Braga/Guimarães)" }];
-
 const STATUS_OPTIONS = Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }));
 
 const EMPTY_FILTERS = {
-  area: [] as string[],
   remoteType: [] as string[],
-  country: [] as string[],
   region: [] as string[],
   sourceId: [] as string[],
-  status: [] as string[],
   isInternship: false,
   includeAutoExcluded: false,
   q: "",
@@ -114,12 +101,12 @@ export function JobsDashboard() {
 
   const query = useMemo(() => {
     const params = new URLSearchParams();
-    filters.area.forEach((v) => params.append("area", v));
     filters.remoteType.forEach((v) => params.append("remoteType", v));
-    filters.country.forEach((v) => params.append("country", v));
     filters.region.forEach((v) => params.append("region", v));
     filters.sourceId.forEach((v) => params.append("sourceId", v));
-    filters.status.forEach((v) => params.append("status", v));
+    // A vagas por triar é sempre "Nova" — vagas já tratadas (aplicada, desisti, etc.) vivem na
+    // página Candidaturas, não aqui. Ver src/components/ApplicationsList.tsx.
+    params.set("status", "NOVA");
     if (filters.isInternship) params.set("isInternship", "true");
     if (filters.includeAutoExcluded) params.set("includeAutoExcluded", "true");
     if (filters.q) params.set("q", filters.q);
@@ -165,7 +152,14 @@ export function JobsDashboard() {
   }
 
   async function quickSetStatus(jobId: string, status: string) {
-    setJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, status } : j)));
+    // Esta lista só mostra "Nova" (ver query acima) — mudar para outro estado tira a vaga da vista
+    // na hora, em vez de a deixar ali marcada como tratada. Ela passa a viver em Candidaturas.
+    if (status === "NOVA") {
+      setJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, status } : j)));
+    } else {
+      setJobs((prev) => prev.filter((j) => j.id !== jobId));
+      setTotal((t) => Math.max(0, t - 1));
+    }
     await fetch(`/api/jobs/${jobId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -190,7 +184,12 @@ export function JobsDashboard() {
     const ids = [...selectedIds];
     if (ids.length === 0) return;
     setBulkApplying(true);
-    setJobs((prev) => prev.map((j) => (selectedIds.has(j.id) ? { ...j, status: bulkStatus } : j)));
+    if (bulkStatus === "NOVA") {
+      setJobs((prev) => prev.map((j) => (selectedIds.has(j.id) ? { ...j, status: bulkStatus } : j)));
+    } else {
+      setJobs((prev) => prev.filter((j) => !selectedIds.has(j.id)));
+      setTotal((t) => Math.max(0, t - ids.length));
+    }
     await Promise.all(
       ids.map((jobId) =>
         fetch(`/api/jobs/${jobId}`, {
@@ -205,131 +204,135 @@ export function JobsDashboard() {
   }
 
   const filtersActive = JSON.stringify(filters) !== JSON.stringify(EMPTY_FILTERS);
+  const modalidadeActive = filters.remoteType.length > 0 || filters.region.length > 0;
+  const modalidadeLabel =
+    filters.remoteType.length === 1
+      ? REMOTE_OPTIONS.find((o) => o.value === filters.remoteType[0])?.label
+      : filters.remoteType.length > 1
+        ? `Modalidade (${filters.remoteType.length})`
+        : "Modalidade";
 
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-baseline gap-2">
           <h1 className="text-xl font-semibold">Vagas</h1>
-          <span className="text-sm text-neutral-500 tabular-nums">
+          <span className="tabular-nums text-sm text-muted">
             {loading ? "a contar..." : `${total} ${total === 1 ? "vaga" : "vagas"}`}
           </span>
         </div>
         <div className="flex items-center gap-3">
-          {refreshMessage && <span className="text-sm text-neutral-400">{refreshMessage}</span>}
+          {refreshMessage && <span className="text-sm text-muted">{refreshMessage}</span>}
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="rounded-md bg-indigo-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-400 disabled:opacity-50"
+            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-ink hover:opacity-90 disabled:opacity-50"
           >
             {refreshing ? "A procurar..." : "Refresh"}
           </button>
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-lg border border-neutral-800 bg-neutral-900/60 p-3">
-        <div className="flex flex-wrap gap-2">
-          <input
-            type="text"
-            placeholder="Pesquisar título ou empresa..."
-            value={filters.q}
-            onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
-            className={`min-w-[220px] flex-1 ${FIELD_CLASS}`}
-          />
-          <select
-            value={filters.datePreset}
-            onChange={(e) => setFilters((f) => ({ ...f, datePreset: e.target.value }))}
-            className={FIELD_CLASS}
-          >
-            {DATE_PRESETS.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
-              </option>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="text"
+          placeholder="Pesquisar título ou empresa..."
+          value={filters.q}
+          onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
+          className={`min-w-[200px] flex-1 ${FIELD_CLASS}`}
+        />
+        <FilterDropdown label={modalidadeLabel ?? "Modalidade"} active={modalidadeActive}>
+          <div className="flex flex-col gap-1">
+            {REMOTE_OPTIONS.map((opt) => (
+              <label key={opt.value} className="flex items-center gap-1.5 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  checked={filters.remoteType.includes(opt.value)}
+                  onChange={() => setFilters((f) => ({ ...f, remoteType: toggle(f.remoteType, opt.value) }))}
+                  className="accent-accent"
+                />
+                {opt.label}
+              </label>
             ))}
-          </select>
-          {filtersActive && (
-            <button
-              onClick={() => setFilters(EMPTY_FILTERS)}
-              className="rounded-md px-2 py-1.5 text-sm text-neutral-500 hover:text-neutral-200"
-            >
-              Limpar filtros
-            </button>
-          )}
-        </div>
-
-        <div className="flex flex-wrap gap-4 border-t border-neutral-800 pt-3">
-          <CheckboxGroup
-            label="Área"
-            options={AREA_OPTIONS}
-            selected={filters.area}
-            onChange={(v) => setFilters((f) => ({ ...f, area: v }))}
-          />
-          <CheckboxGroup
-            label="Modalidade"
-            options={REMOTE_OPTIONS}
-            selected={filters.remoteType}
-            onChange={(v) => setFilters((f) => ({ ...f, remoteType: v }))}
-          />
-          <CheckboxGroup
-            label="País"
-            options={COUNTRY_OPTIONS}
-            selected={filters.country}
-            onChange={(v) => setFilters((f) => ({ ...f, country: v }))}
-          />
-          <CheckboxGroup
-            label="Zona"
-            options={REGION_OPTIONS}
-            selected={filters.region}
-            onChange={(v) => setFilters((f) => ({ ...f, region: v }))}
-          />
-          <CheckboxGroup
-            label="Fonte"
-            options={sourceOptions}
-            selected={filters.sourceId}
-            onChange={(v) => setFilters((f) => ({ ...f, sourceId: v }))}
-          />
-          <CheckboxGroup
-            label="Estado"
-            options={STATUS_OPTIONS}
-            selected={filters.status}
-            onChange={(v) => setFilters((f) => ({ ...f, status: v }))}
-          />
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">Estágio</span>
-            <label className="flex items-center gap-1.5 text-sm text-neutral-300">
+            <label className="mt-1 flex items-center gap-1.5 border-l border-border pl-2 text-sm text-muted">
               <input
                 type="checkbox"
-                checked={filters.isInternship}
-                onChange={(e) => setFilters((f) => ({ ...f, isInternship: e.target.checked }))}
-                className="accent-indigo-500"
+                checked={filters.region.includes("norte")}
+                onChange={() => setFilters((f) => ({ ...f, region: toggle(f.region, "norte") }))}
+                className="accent-accent"
               />
-              Só estágios
+              Só Zona Norte (Presencial/Híbrido)
             </label>
           </div>
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">Auto-descartadas</span>
-            <label className="flex items-center gap-1.5 text-sm text-neutral-300">
-              <input
-                type="checkbox"
-                checked={filters.includeAutoExcluded}
-                onChange={(e) => setFilters((f) => ({ ...f, includeAutoExcluded: e.target.checked }))}
-                className="accent-indigo-500"
-              />
-              Mostrar descartadas automaticamente
-            </label>
+        </FilterDropdown>
+        <FilterDropdown
+          label={filters.sourceId.length ? `Fonte (${filters.sourceId.length})` : "Fonte"}
+          active={filters.sourceId.length > 0}
+        >
+          <div className="flex max-h-64 flex-col gap-1 overflow-y-auto">
+            {sourceOptions.map((opt) => (
+              <label key={opt.value} className="flex items-center gap-1.5 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  checked={filters.sourceId.includes(opt.value)}
+                  onChange={() => setFilters((f) => ({ ...f, sourceId: toggle(f.sourceId, opt.value) }))}
+                  className="accent-accent"
+                />
+                {opt.label}
+              </label>
+            ))}
           </div>
-        </div>
+        </FilterDropdown>
+        <button
+          type="button"
+          onClick={() => setFilters((f) => ({ ...f, isInternship: !f.isInternship }))}
+          className={`${CHIP_CLASS} ${
+            filters.isInternship ? "border-accent bg-tag-bg text-accent" : "border-border bg-surface text-foreground"
+          }`}
+        >
+          Estágio
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilters((f) => ({ ...f, includeAutoExcluded: !f.includeAutoExcluded }))}
+          className={`${CHIP_CLASS} ${
+            filters.includeAutoExcluded
+              ? "border-accent bg-tag-bg text-accent"
+              : "border-border bg-surface text-foreground"
+          }`}
+        >
+          Auto-descartadas
+        </button>
+        <select
+          value={filters.datePreset}
+          onChange={(e) => setFilters((f) => ({ ...f, datePreset: e.target.value }))}
+          className={FIELD_CLASS}
+        >
+          {DATE_PRESETS.map((p) => (
+            <option key={p.value} value={p.value}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+        {filtersActive && (
+          <button
+            onClick={() => setFilters(EMPTY_FILTERS)}
+            className="rounded-md px-2 py-1.5 text-sm text-muted hover:text-foreground"
+          >
+            Limpar filtros
+          </button>
+        )}
       </div>
 
-      <div className="flex flex-col divide-y divide-neutral-800 rounded-lg border border-neutral-800 bg-neutral-900/40">
+      <div className="flex flex-col divide-y divide-border rounded-lg border border-border bg-surface">
         {jobs.length > 0 && (
-          <div className="flex flex-wrap items-center gap-3 bg-neutral-900/80 p-2.5">
-            <label className="flex items-center gap-1.5 text-xs text-neutral-400">
+          <div className="flex flex-wrap items-center gap-3 border-b border-border bg-background/60 p-2.5">
+            <label className="flex items-center gap-1.5 text-xs text-muted">
               <input
                 type="checkbox"
                 checked={selectedIds.size > 0 && selectedIds.size === jobs.length}
                 onChange={toggleSelectAll}
-                className="accent-indigo-500"
+                className="accent-accent"
               />
               {selectedIds.size > 0 ? `${selectedIds.size} selecionada(s)` : "Selecionar tudo"}
             </label>
@@ -349,13 +352,13 @@ export function JobsDashboard() {
                 <button
                   onClick={applyBulkStatus}
                   disabled={bulkApplying}
-                  className="rounded-md bg-indigo-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-400 disabled:opacity-50"
+                  className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-ink hover:opacity-90 disabled:opacity-50"
                 >
                   {bulkApplying ? "A aplicar..." : "Aplicar"}
                 </button>
                 <button
                   onClick={() => setSelectedIds(new Set())}
-                  className="rounded-md px-2 py-1.5 text-sm text-neutral-500 hover:text-neutral-200"
+                  className="rounded-md px-2 py-1.5 text-sm text-muted hover:text-foreground"
                 >
                   Cancelar
                 </button>
@@ -363,10 +366,8 @@ export function JobsDashboard() {
             )}
           </div>
         )}
-        {loading && <p className="p-4 text-sm text-neutral-500">A carregar...</p>}
-        {!loading && jobs.length === 0 && (
-          <p className="p-4 text-sm text-neutral-500">Sem vagas para estes filtros.</p>
-        )}
+        {loading && <p className="p-4 text-sm text-muted">A carregar...</p>}
+        {!loading && jobs.length === 0 && <p className="p-4 text-sm text-muted">Sem vagas para estes filtros.</p>}
         {jobs.map((job) => (
           <JobRow
             key={job.id}
@@ -381,35 +382,41 @@ export function JobsDashboard() {
   );
 }
 
-function CheckboxGroup({
+function FilterDropdown({
   label,
-  options,
-  selected,
-  onChange,
+  active,
+  children,
 }: {
   label: string;
-  options: { value: string; label: string }[];
-  selected: string[];
-  onChange: (next: string[]) => void;
+  active: boolean;
+  children: React.ReactNode;
 }) {
-  if (options.length === 0) return null;
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">{label}</span>
-      <div className="flex flex-col gap-1">
-        {options.map((opt) => (
-          <label key={opt.value} className="flex items-center gap-1.5 text-sm text-neutral-300">
-            <input
-              type="checkbox"
-              checked={selected.includes(opt.value)}
-              onChange={() => onChange(toggle(selected, opt.value))}
-              className="accent-indigo-500"
-            />
-            {opt.label}
-          </label>
-        ))}
-      </div>
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`${CHIP_CLASS} ${active ? "border-accent bg-tag-bg text-accent" : "border-border bg-surface text-foreground"}`}
+      >
+        {label}
+        <span className="text-xs text-muted">▾</span>
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-10 mt-1.5 min-w-[220px] rounded-md border border-border bg-surface p-3 shadow-lg">
+          {children}
+        </div>
+      )}
     </div>
   );
 }
@@ -428,45 +435,42 @@ function JobRow({
   const tags = job.tags ? job.tags.split(",").filter(Boolean) : [];
 
   return (
-    <div className="flex items-start justify-between gap-4 p-4 transition-colors hover:bg-neutral-900/60">
+    <div className="flex items-start justify-between gap-4 p-4 transition-colors hover:bg-background/40">
       <input
         type="checkbox"
         checked={selected}
         onChange={() => onToggleSelect(job.id)}
-        className="mt-1 shrink-0 accent-indigo-500"
+        className="mt-1 shrink-0 accent-accent"
       />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-center gap-2">
-          {job.status === "NOVA" && <span className="h-2 w-2 shrink-0 rounded-full bg-blue-400" />}
-          <Link href={`/vagas/${job.id}`} className="truncate font-medium text-neutral-100 hover:text-indigo-300 hover:underline">
+          <Link href={`/vagas/${job.id}`} className="truncate font-medium text-foreground hover:text-accent hover:underline">
             {job.title}
           </Link>
           {job.isInternship && (
-            <span className="shrink-0 rounded bg-neutral-800 px-1.5 py-0.5 text-xs text-neutral-300">
+            <span className="shrink-0 rounded border border-border bg-background px-1.5 py-0.5 text-xs text-muted">
               Estágio
             </span>
           )}
           {job.autoExcluded && (
             <span
               title={job.autoExcludeReason ?? undefined}
-              className="shrink-0 rounded bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-300"
+              className="shrink-0 rounded border border-warn-text/30 bg-warn-bg px-1.5 py-0.5 text-xs text-warn-text"
             >
               Auto-descartada{job.autoExcludeReason ? `: ${job.autoExcludeReason}` : ""}
             </span>
           )}
         </div>
-        <p className="text-sm text-neutral-400">
+        <p className="text-sm text-muted">
           {job.company}
           {job.location ? ` · ${job.location}` : ""}
           {job.remoteType ? ` · ${REMOTE_LABELS[job.remoteType]}` : ""}
         </p>
-        <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-500">
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
           <span>{job.source.name}</span>
-          {job.publishedAt && (
-            <span>· {new Date(job.publishedAt).toLocaleDateString("pt-PT")}</span>
-          )}
+          {job.publishedAt && <span>· {new Date(job.publishedAt).toLocaleDateString("pt-PT")}</span>}
           {tags.map((tag) => (
-            <span key={tag} className="rounded bg-indigo-500/10 px-1.5 py-0.5 text-indigo-300">
+            <span key={tag} className="rounded bg-tag-bg px-1.5 py-0.5 text-tag-text">
               {tag}
             </span>
           ))}
@@ -476,7 +480,7 @@ function JobRow({
         <select
           value={job.status}
           onChange={(e) => onQuickStatus(job.id, e.target.value)}
-          className={`rounded-md border-0 px-2 py-1 text-xs font-medium ${STATUS_COLORS[job.status]}`}
+          className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${STATUS_COLORS[job.status]}`}
         >
           {Object.entries(STATUS_LABELS).map(([value, label]) => (
             <option key={value} value={value}>
@@ -488,7 +492,7 @@ function JobRow({
           href={job.url}
           target="_blank"
           rel="noreferrer"
-          className="rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-800"
+          className="rounded-md border border-border px-2 py-1 text-xs text-foreground hover:bg-background"
         >
           Abrir
         </a>

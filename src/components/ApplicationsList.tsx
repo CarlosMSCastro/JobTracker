@@ -32,11 +32,11 @@ export function ApplicationsList() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold text-neutral-100">Candidaturas</h1>
-      <div className="flex flex-col divide-y divide-neutral-800 rounded-lg border border-neutral-800 bg-neutral-900/40">
-        {loading && <p className="p-4 text-sm text-neutral-500">A carregar...</p>}
+      <h1 className="text-xl font-semibold text-foreground">Candidaturas</h1>
+      <div className="flex flex-col divide-y divide-border rounded-lg border border-border bg-surface">
+        {loading && <p className="p-4 text-sm text-muted">A carregar...</p>}
         {!loading && jobs.length === 0 && (
-          <p className="p-4 text-sm text-neutral-500">
+          <p className="p-4 text-sm text-muted">
             Ainda não marcaste nenhuma vaga como aplicada. Muda o estado de uma vaga na lista principal.
           </p>
         )}
@@ -44,19 +44,21 @@ export function ApplicationsList() {
           <Link
             key={job.id}
             href={`/vagas/${job.id}`}
-            className="flex items-center justify-between gap-4 p-4 transition-colors hover:bg-neutral-900/60"
+            className="flex items-center justify-between gap-4 p-4 transition-colors hover:bg-background/40"
           >
             <div>
-              <p className="font-medium text-neutral-100">{job.title}</p>
-              <p className="text-sm text-neutral-400">
+              <p className="font-medium text-foreground">{job.title}</p>
+              <p className="text-sm text-muted">
                 {job.company} · {job.source.name}
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-xs text-neutral-500">
+              <span className="text-xs text-muted">
                 atualizado {new Date(job.updatedAt).toLocaleDateString("pt-PT")}
               </span>
-              <span className={`rounded px-2 py-1 text-xs font-medium ${STATUS_COLORS[job.status]}`}>
+              <span
+                className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${STATUS_COLORS[job.status]}`}
+              >
                 {STATUS_LABELS[job.status]}
               </span>
             </div>

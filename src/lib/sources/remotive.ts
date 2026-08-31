@@ -1,4 +1,4 @@
-import { classifyArea, hasAiSignal, isItRelevant } from "./relevance";
+import { hasAiSignal, isItRelevant } from "./relevance";
 import type { Fetcher, NormalizedJob } from "./types";
 
 type RemotiveJob = {
@@ -54,7 +54,6 @@ export const fetchRemotive: Fetcher = async () => {
       company: job.company_name,
       location: job.candidate_required_location,
       remoteType: "REMOTO",
-      area: classifyArea(haystack),
       tags,
       url: job.url,
       publishedAt: job.publication_date ? new Date(job.publication_date) : undefined,

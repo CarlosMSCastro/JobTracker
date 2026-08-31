@@ -1,5 +1,5 @@
 import Firecrawl from "firecrawl";
-import { classifyArea, detectRemoteType, hasAiSignal, isItRelevant } from "./relevance";
+import { detectRemoteType, hasAiSignal, isItRelevant } from "./relevance";
 import type { Fetcher, NormalizedJob } from "./types";
 
 const BASE_URL = "https://pt.indeed.com";
@@ -103,8 +103,6 @@ export const fetchIndeed: Fetcher = async () => {
       company: item.company || "Desconhecida",
       location: item.formattedLocation,
       remoteType: item.remoteLocation ? "REMOTO" : detectRemoteType(haystack),
-      country: "Portugal",
-      area: classifyArea(haystack),
       tags,
       isInternship: /estágio|estagiári|trainee/i.test(title),
       url: `${BASE_URL}/viewjob?jk=${item.jobkey}`,

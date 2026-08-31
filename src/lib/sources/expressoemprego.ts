@@ -1,4 +1,4 @@
-import { classifyArea, detectRemoteType, hasAiSignal } from "./relevance";
+import { detectRemoteType, hasAiSignal } from "./relevance";
 import type { Fetcher, NormalizedJob } from "./types";
 
 const FEEDS = ["informatica", "internet"];
@@ -59,8 +59,6 @@ export const fetchExpressoEmprego: Fetcher = async () => {
         company: item.company || "Desconhecida",
         location: item.location,
         remoteType: detectRemoteType(haystack),
-        country: "Portugal",
-        area: classifyArea(haystack),
         tags,
         isInternship: INTERNSHIP_KEYWORDS.some((kw) => item.title.toLowerCase().includes(kw)),
         url: item.link,

@@ -56,8 +56,6 @@ model Job {
   company       String
   location      String?
   remoteType    RemoteType?
-  country       String?
-  area          String
   tags          String? // lista separada por vírgulas: "AI,Python,React"
   isInternship  Boolean       @default(false)
   url           String        @unique

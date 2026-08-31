@@ -1,5 +1,5 @@
 import Firecrawl from "firecrawl";
-import { classifyArea, detectRemoteType, hasAiSignal, isItRelevant, isSalesLike } from "./relevance";
+import { detectRemoteType, hasAiSignal, isItRelevant, isSalesLike } from "./relevance";
 import type { Fetcher, NormalizedJob } from "./types";
 
 // Categorias do Net-Empregos (ver select "categoria" no formulário de pesquisa do site, mapeado
@@ -134,8 +134,6 @@ export const fetchNetEmpregos: Fetcher = async () => {
         company: item.company || "Desconhecida",
         location: item.location,
         remoteType: detectRemoteType(haystack),
-        country: "Portugal",
-        area: classifyArea(haystack),
         tags,
         isInternship: INTERNSHIP_KEYWORDS.some((kw) => item.title.toLowerCase().includes(kw)),
         url: `${BASE_URL}${item.href}`,

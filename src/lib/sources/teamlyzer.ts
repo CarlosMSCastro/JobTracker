@@ -1,4 +1,4 @@
-import { classifyArea, detectRemoteType, hasAiSignal } from "./relevance";
+import { detectRemoteType, hasAiSignal } from "./relevance";
 import type { Fetcher, NormalizedJob } from "./types";
 
 type TeamlyzerJob = {
@@ -66,8 +66,6 @@ export const fetchTeamlyzer: Fetcher = async () => {
         company: job.hiringOrganization?.name ?? "Desconhecida",
         location,
         remoteType: detectRemoteType(haystack),
-        country: "Portugal",
-        area: classifyArea(haystack),
         tags,
         isInternship: INTERNSHIP_KEYWORDS.some((kw) => job.title.toLowerCase().includes(kw)),
         url: job.url,

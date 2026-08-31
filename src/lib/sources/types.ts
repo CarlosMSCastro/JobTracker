@@ -4,8 +4,6 @@ export type NormalizedJob = {
   company: string;
   location?: string;
   remoteType?: "REMOTO" | "PRESENCIAL" | "HIBRIDO";
-  country?: string;
-  area: string;
   tags?: string[];
   isInternship?: boolean;
   url: string;

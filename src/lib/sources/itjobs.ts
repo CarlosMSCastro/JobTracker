@@ -1,4 +1,4 @@
-import { classifyArea, detectRemoteType, hasAiSignal } from "./relevance";
+import { detectRemoteType, hasAiSignal } from "./relevance";
 import type { Fetcher, NormalizedJob } from "./types";
 
 type ItJobsResult = {
@@ -48,8 +48,6 @@ export const fetchItJobs: Fetcher = async (config) => {
         company: result.company?.name ?? "Desconhecida",
         location,
         remoteType: detectRemoteType(`${result.title} ${location ?? ""}`),
-        country: "Portugal",
-        area: classifyArea(`${result.title} ${result.body ?? ""}`),
         tags: detectTags(result.title, result.body),
         url: `https://www.itjobs.pt/oferta/${result.id}/${result.slug}`,
         publishedAt: result.publishedAt ? new Date(result.publishedAt) : undefined,

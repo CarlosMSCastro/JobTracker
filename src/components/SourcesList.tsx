@@ -64,18 +64,18 @@ export function SourcesList() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold text-neutral-100">Fontes</h1>
-      {message && <p className="text-sm text-neutral-400">{message}</p>}
-      <div className="flex flex-col divide-y divide-neutral-800 rounded-lg border border-neutral-800 bg-neutral-900/40">
-        {loading && <p className="p-4 text-sm text-neutral-500">A carregar...</p>}
+      <h1 className="text-xl font-semibold text-foreground">Fontes</h1>
+      {message && <p className="text-sm text-muted">{message}</p>}
+      <div className="flex flex-col divide-y divide-border rounded-lg border border-border bg-surface">
+        {loading && <p className="p-4 text-sm text-muted">A carregar...</p>}
         {sources.map((source) => {
           const limitReached = source.requestLimit !== null && source.requestCount >= source.requestLimit;
 
           return (
             <div key={source.id} className="flex items-center justify-between gap-4 p-4">
               <div>
-                <p className="font-medium text-neutral-100">{source.name}</p>
-                <p className="text-sm text-neutral-500">
+                <p className="font-medium text-foreground">{source.name}</p>
+                <p className="text-sm text-muted">
                   {source.type}
                   {source.area ? ` · ${source.area}` : ""}
                   {source.lastFetch
@@ -87,8 +87,8 @@ export function SourcesList() {
                 {source.requestLimit !== null && (
                   <>
                     <span
-                      className={`rounded px-2 py-1 text-xs font-medium tabular-nums ${
-                        limitReached ? "bg-red-500/15 text-red-300" : "bg-neutral-800 text-neutral-300"
+                      className={`rounded-md border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide tabular-nums ${
+                        limitReached ? "border-red-400/30 bg-red-500/10 text-red-300" : "border-border bg-background text-muted"
                       }`}
                     >
                       {source.requestCount}/{source.requestLimit}
@@ -96,7 +96,7 @@ export function SourcesList() {
                     <button
                       onClick={() => fetchOnce(source)}
                       disabled={fetchingId === source.id || limitReached}
-                      className="rounded-md border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+                      className="rounded-md border border-border px-3 py-1.5 text-sm text-foreground hover:bg-background disabled:opacity-50"
                     >
                       {fetchingId === source.id
                         ? "A procurar..."
@@ -108,8 +108,10 @@ export function SourcesList() {
                 )}
                 <button
                   onClick={() => toggleActive(source)}
-                  className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                    source.active ? "bg-green-500/15 text-green-300" : "bg-neutral-800 text-neutral-500"
+                  className={`rounded-md border px-3 py-1.5 text-sm font-medium ${
+                    source.active
+                      ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-300"
+                      : "border-border bg-background text-muted"
                   }`}
                 >
                   {source.active ? "Ativa" : "Inativa"}

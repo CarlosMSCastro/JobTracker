@@ -1,3 +1,5 @@
+import { franc } from "franc-min";
+
 // Palavras-chave para reconhecer vagas de informática/TI em fontes generalistas (ex: Arbeitnow,
 // Net-Empregos), que agregam todo o tipo de emprego e não só tech. Usadas em title+tags+descrição.
 const IT_KEYWORDS = [
@@ -211,6 +213,27 @@ export function isPortugalLocation(text: string): boolean {
   return matchesAny(text.toLowerCase(), PORTUGAL_LOCATION_KEYWORDS);
 }
 
+// Vagas do mercado alemão/DACH (Alemanha/Áustria/Suíça) que aparecem sobretudo no Arbeitnow —
+// o filtro de país (isPortugalLocation) só se aplica a vagas presenciais/híbridas, remoto passa
+// sempre sem verificação, o que deixava passar vagas claramente não relevantes (ex: "IT Systems
+// Engineer (m/w/d)" em Munique) só por estarem marcadas como remoto. "(m/w/d)"/"(w/m/d)"/"(m/f/d)"
+// é a convenção de inclusão de género usada quase em exclusivo em anúncios de emprego alemães —
+// sinal forte e com baixo risco de falso positivo (nunca aparece em vagas PT/EN normais).
+const GERMAN_GENDER_TAG_RE = /\((?:m\/w\/d|w\/m\/d|d\/w\/m|m\/f\/d|f\/m\/d)\)|all genders/i;
+const GERMAN_WORDS = ["mitarbeiter", "sucht:", " für ", "gehalt", "bewerbung"];
+const GERMAN_LANGUAGE_REQUIRED_KEYWORDS = [
+  "german speaking",
+  "fluent in german",
+  "deutschkenntnisse",
+  "muttersprache deutsch",
+];
+
+export function isGermanMarketJob(text: string): boolean {
+  if (GERMAN_GENDER_TAG_RE.test(text)) return true;
+  const haystack = text.toLowerCase();
+  return matchesAny(haystack, GERMAN_WORDS) || matchesAny(haystack, GERMAN_LANGUAGE_REQUIRED_KEYWORDS);
+}
+
 // Concelhos da Área Metropolitana do Porto + Cávado + Ave — a zona de Porto/Braga/Guimarães e
 // concelhos associados, pedido explícito do utilizador para filtrar vagas presenciais/híbridas.
 export const NORTE_REGION_KEYWORDS = [
@@ -265,24 +288,6 @@ export function hasAiSignal(text: string): boolean {
   return AI_KEYWORDS.some((kw) => haystack.includes(kw));
 }
 
-// Classifica a área para os filtros da app: "Dev/TI" para perfis de programação/engenharia,
-// "Helpdesk" para suporte/apoio técnico/loja, "Backoffice" para funções de backoffice, "Admin"
-// para administrativo/secretariado/receção. Prioridade: Dev/TI > Helpdesk > Backoffice > Admin,
-// porque um título pode conter mais que uma palavra-chave (ex: "Técnico de Suporte Administrativo").
-export function classifyArea(text: string): "Dev/TI" | "Helpdesk" | "Backoffice" | "Admin" {
-  const haystack = text.toLowerCase();
-  const isDev = matchesAny(haystack, IT_KEYWORDS);
-  const isSupportOrRetail = matchesAny(haystack, SUPPORT_KEYWORDS) || matchesAny(haystack, RETAIL_KEYWORDS);
-  const isBackoffice = matchesAny(haystack, BACKOFFICE_KEYWORDS);
-  const isAdmin = matchesAny(haystack, ADMIN_KEYWORDS);
-
-  if (isDev) return "Dev/TI";
-  if (isSupportOrRetail) return "Helpdesk";
-  if (isBackoffice) return "Backoffice";
-  if (isAdmin) return "Admin";
-  return "Dev/TI";
-}
-
 // Deteta modalidade a partir de texto livre (título + localização) quando a fonte não dá um campo
 // estruturado para isto — usado por ITJobs.pt, Jooble, Net-Empregos, Expresso Emprego e Arbeitnow.
 // Por omissão assume "PRESENCIAL": nestas fontes (ofertas generalistas em Portugal) a esmagadora
@@ -308,8 +313,28 @@ const MIN_YEARS_TO_EXCLUDE = 3;
 
 const US_ONLY_KEYWORDS = ["usa only", "us only", "usa based only", "us based only", "united states only"];
 
-// Cirílico (russo, ucraniano, etc.) — nenhuma vaga legítima em PT/EN contém estes carateres.
-const CYRILLIC_RE = /[Ѐ-ӿ]/;
+// Deteção de idioma no texto completo da página (não no título — em textos curtos o franc erra
+// facilmente, ex: confundiu "Programador de Software Júnior" isolado com romeno). Português,
+// inglês e espanhol passam; qualquer outro idioma detetado com confiança é motivo de exclusão —
+// pedido explícito do utilizador depois de aparecerem vagas em francês e alemão por sítios como o
+// Net-Empregos que, ao contrário do Arbeitnow, não têm um sinal estruturado de mercado/país.
+const ALLOWED_LANGUAGES: Record<string, string> = { por: "português", eng: "inglês", spa: "espanhol" };
+const LANGUAGE_NAMES: Record<string, string> = {
+  fra: "francês",
+  deu: "alemão",
+  ita: "italiano",
+  nld: "neerlandês",
+  pol: "polaco",
+  rus: "russo",
+  ukr: "ucraniano",
+  ron: "romeno",
+};
+
+function detectForeignLanguage(text: string): string | null {
+  const code = franc(text, { minLength: 40 });
+  if (code === "und" || code in ALLOWED_LANGUAGES) return null;
+  return LANGUAGE_NAMES[code] ?? code;
+}
 
 // O Jobicy (e plataformas com o mesmo template de "Role snapshot") indica a elegibilidade geográfica
 // como "Remote from <país/região> Salary ...", em vez de frases como "USA only" já cobertas acima —
@@ -338,9 +363,8 @@ function extractRemoteFromRestriction(text: string): string | null {
 }
 
 export function checkAutoDiscardReason(text: string): string | null {
-  if (CYRILLIC_RE.test(text)) {
-    return "Página não está em português/inglês (carateres cirílicos detetados)";
-  }
+  const foreignLanguage = detectForeignLanguage(text);
+  if (foreignLanguage) return `Página não está em português/inglês/espanhol (idioma detetado: ${foreignLanguage})`;
 
   const haystack = text.toLowerCase();
   const usOnly = US_ONLY_KEYWORDS.find((kw) => haystack.includes(kw));

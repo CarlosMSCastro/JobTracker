@@ -7,13 +7,15 @@ export const STATUS_LABELS: Record<string, string> = {
   DESISTI: "Desisti",
 };
 
+// Cor semântica por estado — deliberadamente à parte do acento âmbar da app (ver globals.css),
+// para o acento continuar a significar só "ação/destaque" e o estado ler-se como um badge de CI.
 export const STATUS_COLORS: Record<string, string> = {
-  NOVA: "bg-blue-500/15 text-blue-300",
-  APLICADA: "bg-amber-500/15 text-amber-300",
-  ENTREVISTA: "bg-purple-500/15 text-purple-300",
-  REJEITADA: "bg-red-500/15 text-red-300",
-  OFERTA: "bg-green-500/15 text-green-300",
-  DESISTI: "bg-neutral-800 text-neutral-500",
+  NOVA: "border-blue-400/30 bg-blue-500/10 text-blue-300",
+  APLICADA: "border-amber-400/30 bg-amber-500/10 text-amber-300",
+  ENTREVISTA: "border-purple-400/30 bg-purple-500/10 text-purple-300",
+  REJEITADA: "border-red-400/30 bg-red-500/10 text-red-300",
+  OFERTA: "border-emerald-400/30 bg-emerald-500/10 text-emerald-300",
+  DESISTI: "border-border bg-surface text-muted",
 };
 
 export const REMOTE_LABELS: Record<string, string> = {

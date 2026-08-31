@@ -59,8 +59,6 @@ async function refreshSource(source: Source): Promise<RefreshSummary> {
           company: job.company,
           location: job.location,
           remoteType: job.remoteType,
-          country: job.country,
-          area: job.area,
           tags: job.tags?.join(","),
           isInternship: job.isInternship ?? false,
           url: job.url,

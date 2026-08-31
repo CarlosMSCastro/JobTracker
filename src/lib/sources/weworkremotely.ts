@@ -1,4 +1,4 @@
-import { classifyArea, hasAiSignal, isItRelevant } from "./relevance";
+import { hasAiSignal, isItRelevant } from "./relevance";
 import type { Fetcher, NormalizedJob } from "./types";
 
 // Categorias reais do WeWorkRemotely (weworkremotely.com/categories/{slug}.rss).
@@ -67,7 +67,6 @@ export const fetchWeWorkRemotely: Fetcher = async () => {
         title: position,
         company,
         remoteType: "REMOTO",
-        area: classifyArea(haystack),
         tags,
         url: item.link,
         publishedAt: item.pubDate ? new Date(item.pubDate) : undefined,

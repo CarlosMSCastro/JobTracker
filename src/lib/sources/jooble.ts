@@ -1,4 +1,4 @@
-import { classifyArea, detectRemoteType, hasAiSignal } from "./relevance";
+import { detectRemoteType, hasAiSignal } from "./relevance";
 import type { Fetcher, NormalizedJob } from "./types";
 
 type JoobleJob = {
@@ -41,8 +41,6 @@ export const fetchJooble: Fetcher = async (config) => {
       company: job.company || "Desconhecida",
       location: job.location,
       remoteType: detectRemoteType(`${job.title} ${job.location ?? ""}`),
-      country: "Portugal",
-      area: classifyArea(haystack),
       tags,
       url: job.link,
       publishedAt: job.updated ? new Date(job.updated) : undefined,

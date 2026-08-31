@@ -1,4 +1,4 @@
-import { classifyArea, detectRemoteType, hasAiSignal, isItRelevant } from "./relevance";
+import { detectRemoteType, hasAiSignal, isItRelevant } from "./relevance";
 import type { Fetcher, NormalizedJob } from "./types";
 
 // Categorias do Empregos.org (ids do formulário de pesquisa avançada, campo "jids[]") — em teoria
@@ -125,8 +125,6 @@ export const fetchEmpregosOrg: Fetcher = async () => {
         company: item.company,
         location: item.location,
         remoteType: detectRemoteType(haystack),
-        country: "Portugal",
-        area: classifyArea(haystack),
         tags,
         isInternship: INTERNSHIP_KEYWORDS.some((kw) => item.title.toLowerCase().includes(kw)),
         url: `${BASE_URL}/view.php?job_id=${item.jobId}`,
