@@ -311,12 +311,30 @@ const US_ONLY_KEYWORDS = ["usa only", "us only", "usa based only", "us based onl
 // Cirílico (russo, ucraniano, etc.) — nenhuma vaga legítima em PT/EN contém estes carateres.
 const CYRILLIC_RE = /[Ѐ-ӿ]/;
 
+// O Jobicy (e plataformas com o mesmo template de "Role snapshot") indica a elegibilidade geográfica
+// como "Remote from <país/região> Salary ...", em vez de frases como "USA only" já cobertas acima —
+// só descoberto ao investigar por que o auto-discard quase nunca disparava nas fontes remotas
+// internacionais (Jobicy tinha 416 vagas e só 4 exclusões antes disto — ver memória
+// "project_job_tracker_flow_redesign"). Qualquer coisa que não seja claramente aberta a Portugal
+// (mundial/Europa/etc) é tratada como restrição geográfica. \b em cada termo evita falsos positivos
+// como "Peru" a bater com "eu", ou "Germany" a bater com "any".
+const REMOTE_FROM_RE = /remote from ([a-zà-ÿ\s,()&/-]{2,60}?)\s+salary/i;
+const INCLUSIVE_REMOTE_RE = /\b(anywhere|worldwide|world|global|international|portugal|europe|european|emea|earth|eu|any)\b/i;
+
 function extractYearsRequirement(text: string): number | null {
   const m1 = YEARS_THEN_EXPERIENCE_RE.exec(text);
   if (m1) return Number(m1[1]);
   const m2 = EXPERIENCE_THEN_YEARS_RE.exec(text);
   if (m2) return Number(m2[2]);
   return null;
+}
+
+function extractRemoteFromRestriction(text: string): string | null {
+  const match = REMOTE_FROM_RE.exec(text);
+  if (!match) return null;
+  const location = match[1].trim();
+  if (location === "" || INCLUSIVE_REMOTE_RE.test(location)) return null;
+  return location;
 }
 
 export function checkAutoDiscardReason(text: string): string | null {
@@ -327,6 +345,9 @@ export function checkAutoDiscardReason(text: string): string | null {
   const haystack = text.toLowerCase();
   const usOnly = US_ONLY_KEYWORDS.find((kw) => haystack.includes(kw));
   if (usOnly) return `Vaga restrita aos EUA ("${usOnly}")`;
+
+  const remoteFrom = extractRemoteFromRestriction(text);
+  if (remoteFrom) return `Remoto restrito a: ${remoteFrom}`;
 
   const years = extractYearsRequirement(text);
   if (years !== null && years >= MIN_YEARS_TO_EXCLUDE) return `Exige ${years}+ anos de experiência`;

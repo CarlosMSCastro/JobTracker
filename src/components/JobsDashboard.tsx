@@ -82,6 +82,9 @@ export function JobsDashboard() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState("DESISTI");
+  const [bulkApplying, setBulkApplying] = useState(false);
 
   useEffect(() => {
     fetch("/api/sources")
@@ -131,6 +134,7 @@ export function JobsDashboard() {
       .then((data) => {
         setJobs(data.jobs ?? []);
         setTotal(data.total ?? 0);
+        setSelectedIds(new Set());
       })
       .finally(() => setLoading(false));
   }, [query]);
@@ -167,6 +171,37 @@ export function JobsDashboard() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
+  }
+
+  function toggleSelected(jobId: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(jobId)) next.delete(jobId);
+      else next.add(jobId);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) => (prev.size === jobs.length ? new Set() : new Set(jobs.map((j) => j.id))));
+  }
+
+  async function applyBulkStatus() {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    setBulkApplying(true);
+    setJobs((prev) => prev.map((j) => (selectedIds.has(j.id) ? { ...j, status: bulkStatus } : j)));
+    await Promise.all(
+      ids.map((jobId) =>
+        fetch(`/api/jobs/${jobId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: bulkStatus }),
+        }),
+      ),
+    );
+    setSelectedIds(new Set());
+    setBulkApplying(false);
   }
 
   const filtersActive = JSON.stringify(filters) !== JSON.stringify(EMPTY_FILTERS);
@@ -287,12 +322,59 @@ export function JobsDashboard() {
       </div>
 
       <div className="flex flex-col divide-y divide-neutral-800 rounded-lg border border-neutral-800 bg-neutral-900/40">
+        {jobs.length > 0 && (
+          <div className="flex flex-wrap items-center gap-3 bg-neutral-900/80 p-2.5">
+            <label className="flex items-center gap-1.5 text-xs text-neutral-400">
+              <input
+                type="checkbox"
+                checked={selectedIds.size > 0 && selectedIds.size === jobs.length}
+                onChange={toggleSelectAll}
+                className="accent-indigo-500"
+              />
+              {selectedIds.size > 0 ? `${selectedIds.size} selecionada(s)` : "Selecionar tudo"}
+            </label>
+            {selectedIds.size > 0 && (
+              <div className="ml-auto flex items-center gap-2">
+                <select
+                  value={bulkStatus}
+                  onChange={(e) => setBulkStatus(e.target.value)}
+                  className={FIELD_CLASS}
+                >
+                  {STATUS_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={applyBulkStatus}
+                  disabled={bulkApplying}
+                  className="rounded-md bg-indigo-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-400 disabled:opacity-50"
+                >
+                  {bulkApplying ? "A aplicar..." : "Aplicar"}
+                </button>
+                <button
+                  onClick={() => setSelectedIds(new Set())}
+                  className="rounded-md px-2 py-1.5 text-sm text-neutral-500 hover:text-neutral-200"
+                >
+                  Cancelar
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         {loading && <p className="p-4 text-sm text-neutral-500">A carregar...</p>}
         {!loading && jobs.length === 0 && (
           <p className="p-4 text-sm text-neutral-500">Sem vagas para estes filtros.</p>
         )}
         {jobs.map((job) => (
-          <JobRow key={job.id} job={job} onQuickStatus={quickSetStatus} />
+          <JobRow
+            key={job.id}
+            job={job}
+            onQuickStatus={quickSetStatus}
+            selected={selectedIds.has(job.id)}
+            onToggleSelect={toggleSelected}
+          />
         ))}
       </div>
     </div>
@@ -332,11 +414,27 @@ function CheckboxGroup({
   );
 }
 
-function JobRow({ job, onQuickStatus }: { job: Job; onQuickStatus: (id: string, status: string) => void }) {
+function JobRow({
+  job,
+  onQuickStatus,
+  selected,
+  onToggleSelect,
+}: {
+  job: Job;
+  onQuickStatus: (id: string, status: string) => void;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
+}) {
   const tags = job.tags ? job.tags.split(",").filter(Boolean) : [];
 
   return (
     <div className="flex items-start justify-between gap-4 p-4 transition-colors hover:bg-neutral-900/60">
+      <input
+        type="checkbox"
+        checked={selected}
+        onChange={() => onToggleSelect(job.id)}
+        className="mt-1 shrink-0 accent-indigo-500"
+      />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-center gap-2">
           {job.status === "NOVA" && <span className="h-2 w-2 shrink-0 rounded-full bg-blue-400" />}

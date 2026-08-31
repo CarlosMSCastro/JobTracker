@@ -14,9 +14,6 @@ export async function GET(request: NextRequest) {
   const remoteType = params.getAll("remoteType");
   if (remoteType.length) where.remoteType = { in: remoteType as RemoteType[] };
 
-  const country = params.getAll("country");
-  if (country.length) where.country = { in: country };
-
   const sourceId = params.getAll("sourceId");
   if (sourceId.length) where.sourceId = { in: sourceId };
 
@@ -32,6 +29,16 @@ export async function GET(request: NextRequest) {
   if (!includeAutoExcluded) where.autoExcluded = false;
 
   const and: Prisma.JobWhereInput[] = [];
+
+  const country = params.getAll("country");
+  if (country.length) {
+    // Vagas remotas raramente têm `country` preenchido (as fontes internacionais não o definem) —
+    // sem este OR, filtrar "País: Portugal" + "Modalidade: Remoto" devolvia quase sempre 0
+    // resultados (13 em vez das ~540 vagas remotas existentes). Remoto passa sempre, tal como no
+    // filtro de Zona logo a seguir — a elegibilidade geográfica de uma vaga remota já é validada
+    // pelo auto-discard (ver relevance.ts, regra "Remote from X"), não pelo campo `country`.
+    and.push({ OR: [{ remoteType: "REMOTO" }, { country: { in: country } }] });
+  }
 
   const q = params.get("q");
   if (q) {

@@ -1,7 +1,7 @@
 import { prisma } from "./db";
 import { filterNewJobs } from "./dedupe";
 import { FETCHERS } from "./sources/registry";
-import { checkJobPage } from "./sources/autodiscard";
+import { checkJobPages } from "./sources/autodiscard";
 import { isSeniorTitle } from "./sources/relevance";
 import type { Source } from "@/generated/prisma/client";
 import type { SourceConfig } from "./sources/types";
@@ -78,11 +78,15 @@ async function refreshSource(source: Source): Promise<RefreshSummary> {
         where: { url: { in: newJobs.map((job) => job.url) } },
         select: { id: true, url: true },
       });
+      const discardResults = await checkJobPages(createdJobs.map((job) => job.url));
       await Promise.all(
         createdJobs.map(async ({ id, url }) => {
-          const { autoExcluded, reason } = await checkJobPage(url);
-          if (autoExcluded) {
-            await prisma.job.update({ where: { id }, data: { autoExcluded, autoExcludeReason: reason } });
+          const result = discardResults.get(url);
+          if (result?.autoExcluded) {
+            await prisma.job.update({
+              where: { id },
+              data: { autoExcluded: true, autoExcludeReason: result.reason },
+            });
           }
         }),
       );

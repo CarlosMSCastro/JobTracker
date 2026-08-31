@@ -25,7 +25,6 @@ enum RemoteType {
 
 enum JobStatus {
   NOVA
-  VISTA
   APLICADA
   ENTREVISTA
   REJEITADA
@@ -66,7 +65,6 @@ model Job {
   fetchedAt     DateTime      @default(now())
   status        JobStatus     @default(NOVA)
   notes         String?
-  applicationText String? // texto realmente enviado na candidatura — corpo do email ou o que foi colado numa caixa de texto do site
   autoExcluded       Boolean  @default(false) // descartada automaticamente por um sinal desqualificante encontrado no texto completo da página de destino (ver src/lib/sources/autodiscard.ts) — nunca apagada, só escondida por omissão
   autoExcludeReason  String? // motivo legível associado ao autoExcluded (ex: "5+ anos de experiência exigidos")
   statusHistory StatusEvent[]

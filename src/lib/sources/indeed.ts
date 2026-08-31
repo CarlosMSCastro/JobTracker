@@ -1,11 +1,14 @@
+import Firecrawl from "firecrawl";
 import { classifyArea, detectRemoteType, hasAiSignal, isItRelevant } from "./relevance";
 import type { Fetcher, NormalizedJob } from "./types";
 
 const BASE_URL = "https://pt.indeed.com";
-const HEADERS = {
-  "User-Agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-};
+
+// O Indeed bloqueia sempre pedidos vindos de IPs de datacenter (inclui a Vercel), independentemente
+// dos headers enviados — confirmado: o mesmo pedido a partir de uma rede doméstica devolve os
+// resultados normalmente. Mesma solução já usada em netempregos.ts: o Firecrawl faz o pedido a
+// partir da infraestrutura dele, contornando o bloqueio.
+const firecrawl = new Firecrawl({ apiKey: process.env.FIRECRAWL_API_KEY });
 
 // O Indeed só devolve resultados sem autenticação na 1ª página de cada pesquisa — pedir start=10+
 // redireciona para uma página de login ("page-two-signin"). Por isso não há paginação aqui: cada
@@ -48,19 +51,17 @@ type IndeedResult = {
   remoteLocation?: boolean;
 };
 
-async function fetchQuery(query: string): Promise<IndeedResult[]> {
+function queryUrl(query: string): string {
   const params = new URLSearchParams({ q: query, l: "Portugal" });
-  const res = await fetch(`${BASE_URL}/jobs?${params.toString()}`, { headers: HEADERS });
-  if (!res.ok) throw new Error(`Indeed devolveu ${res.status} para "${query}"`);
+  return `${BASE_URL}/jobs?${params.toString()}`;
+}
 
-  const html = await res.text();
+function parseResults(html: string): IndeedResult[] {
   const markerIdx = html.indexOf(JOBCARDS_MARKER);
-  if (markerIdx === -1) {
-    throw new Error("Indeed bloqueou o pedido (página sem dados — possível CAPTCHA/login exigido)");
-  }
+  if (markerIdx === -1) return [];
 
   const json = extractJsonObject(html, markerIdx + JOBCARDS_MARKER.length);
-  if (!json) throw new Error("Indeed devolveu uma resposta inesperada (JSON incompleto)");
+  if (!json) return [];
 
   const data = JSON.parse(json) as {
     metaData?: { mosaicProviderJobCardsModel?: { results?: IndeedResult[] } };
@@ -72,46 +73,43 @@ async function fetchQuery(query: string): Promise<IndeedResult[]> {
 export const fetchIndeed: Fetcher = async () => {
   const jobs: NormalizedJob[] = [];
   const seenIds = new Set<string>();
-  let anySucceeded = false;
 
-  for (const query of QUERIES) {
-    let results: IndeedResult[];
-    try {
-      results = await fetchQuery(query);
-      anySucceeded = true;
-    } catch {
-      // Esta pesquisa foi bloqueada — tenta as restantes em vez de desistir do refresh todo.
-      continue;
-    }
+  const urls = QUERIES.map(queryUrl);
+  const job = await firecrawl.batchScrape(urls, { options: { formats: ["rawHtml"] }, pollInterval: 2, timeout: 50 });
 
-    for (const item of results) {
-      const title = (item.title || item.displayTitle || "").trim();
-      if (!item.jobkey || !title || seenIds.has(item.jobkey)) continue;
-      if (!isItRelevant(title)) continue;
-      seenIds.add(item.jobkey);
-
-      const haystack = `${title} ${item.formattedLocation ?? ""}`;
-      const tags: string[] = [];
-      if (hasAiSignal(haystack)) tags.push("AI");
-
-      jobs.push({
-        externalId: item.jobkey,
-        title,
-        company: item.company || "Desconhecida",
-        location: item.formattedLocation,
-        remoteType: item.remoteLocation ? "REMOTO" : detectRemoteType(haystack),
-        country: "Portugal",
-        area: classifyArea(haystack),
-        tags,
-        isInternship: /estágio|estagiári|trainee/i.test(title),
-        url: `${BASE_URL}/viewjob?jk=${item.jobkey}`,
-        publishedAt: item.createDate ? new Date(item.createDate) : undefined,
-      });
-    }
+  const allResults: IndeedResult[] = [];
+  for (const doc of job.data) {
+    if (!doc.rawHtml) continue;
+    allResults.push(...parseResults(doc.rawHtml));
   }
 
-  if (!anySucceeded) {
-    throw new Error("Indeed bloqueou todos os pedidos (possível CAPTCHA/login exigido) — tenta mais tarde");
+  if (job.data.length > 0 && allResults.length === 0) {
+    throw new Error("Indeed bloqueou todos os pedidos (possível CAPTCHA/login exigido, ou mudou o formato da página)");
+  }
+
+  for (const item of allResults) {
+    const title = (item.title || item.displayTitle || "").trim();
+    if (!item.jobkey || !title || seenIds.has(item.jobkey)) continue;
+    if (!isItRelevant(title)) continue;
+    seenIds.add(item.jobkey);
+
+    const haystack = `${title} ${item.formattedLocation ?? ""}`;
+    const tags: string[] = [];
+    if (hasAiSignal(haystack)) tags.push("AI");
+
+    jobs.push({
+      externalId: item.jobkey,
+      title,
+      company: item.company || "Desconhecida",
+      location: item.formattedLocation,
+      remoteType: item.remoteLocation ? "REMOTO" : detectRemoteType(haystack),
+      country: "Portugal",
+      area: classifyArea(haystack),
+      tags,
+      isInternship: /estágio|estagiári|trainee/i.test(title),
+      url: `${BASE_URL}/viewjob?jk=${item.jobkey}`,
+      publishedAt: item.createDate ? new Date(item.createDate) : undefined,
+    });
   }
 
   return jobs;

@@ -1,6 +1,5 @@
 export const STATUS_LABELS: Record<string, string> = {
   NOVA: "Nova",
-  VISTA: "Vista",
   APLICADA: "Aplicada",
   ENTREVISTA: "Entrevista",
   REJEITADA: "Rejeitada",
@@ -10,7 +9,6 @@ export const STATUS_LABELS: Record<string, string> = {
 
 export const STATUS_COLORS: Record<string, string> = {
   NOVA: "bg-blue-500/15 text-blue-300",
-  VISTA: "bg-neutral-800 text-neutral-300",
   APLICADA: "bg-amber-500/15 text-amber-300",
   ENTREVISTA: "bg-purple-500/15 text-purple-300",
   REJEITADA: "bg-red-500/15 text-red-300",

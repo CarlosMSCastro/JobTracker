@@ -22,7 +22,6 @@ type Job = {
   autoExcluded: boolean;
   autoExcludeReason: string | null;
   notes: string | null;
-  applicationText: string | null;
   source: { name: string };
   statusHistory: StatusEvent[];
 };
@@ -30,26 +29,14 @@ type Job = {
 export function JobDetail({ jobId }: { jobId: string }) {
   const [job, setJob] = useState<Job | null>(null);
   const [notes, setNotes] = useState("");
-  const [applicationText, setApplicationText] = useState("");
   const [saving, setSaving] = useState(false);
-  const [savingApplicationText, setSavingApplicationText] = useState(false);
 
   useEffect(() => {
     fetch(`/api/jobs/${jobId}`)
       .then((r) => r.json())
-      .then(async (data) => {
+      .then((data) => {
         setJob(data.job);
         setNotes(data.job?.notes ?? "");
-        setApplicationText(data.job?.applicationText ?? "");
-        if (data.job?.status === "NOVA") {
-          await fetch(`/api/jobs/${jobId}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ status: "VISTA" }),
-          });
-          const refreshed = await fetch(`/api/jobs/${jobId}`).then((r) => r.json());
-          setJob(refreshed.job);
-        }
       });
   }, [jobId]);
 
@@ -74,16 +61,6 @@ export function JobDetail({ jobId }: { jobId: string }) {
       body: JSON.stringify({ notes }),
     });
     setSaving(false);
-  }
-
-  async function saveApplicationText() {
-    setSavingApplicationText(true);
-    await fetch(`/api/jobs/${jobId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ applicationText }),
-    });
-    setSavingApplicationText(false);
   }
 
   if (!job) return <p className="text-sm text-neutral-500">A carregar...</p>;
@@ -151,22 +128,9 @@ export function JobDetail({ jobId }: { jobId: string }) {
           onBlur={saveNotes}
           rows={5}
           className="rounded-md border border-neutral-800 bg-neutral-900 p-2 text-sm text-neutral-100 placeholder:text-neutral-500 focus:border-indigo-500 focus:outline-none"
-          placeholder="Ex: enviei CV a 12/08, contacto do recrutador..."
+          placeholder="Ex: enviei CV a 12/08, contacto do recrutador, texto da candidatura, motivo de descartar..."
         />
         {saving && <span className="text-xs text-neutral-500">A guardar...</span>}
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium text-neutral-300">Texto da candidatura</label>
-        <textarea
-          value={applicationText}
-          onChange={(e) => setApplicationText(e.target.value)}
-          onBlur={saveApplicationText}
-          rows={8}
-          className="rounded-md border border-neutral-800 bg-neutral-900 p-2 text-sm text-neutral-100 placeholder:text-neutral-500 focus:border-indigo-500 focus:outline-none"
-          placeholder="Cola aqui o email enviado, ou o texto usado numa caixa de candidatura do site..."
-        />
-        {savingApplicationText && <span className="text-xs text-neutral-500">A guardar...</span>}
       </div>
 
       <div>

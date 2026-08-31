@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { refreshSourceById } from "@/lib/refresh";
 
-export const maxDuration = 60;
+// Mesma margem que /api/refresh — esta fonte pode acionar o fallback Firecrawl do auto-discard
+// (ver lib/sources/autodiscard.ts), que sozinho já pode demorar ~25s.
+export const maxDuration = 120;
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
