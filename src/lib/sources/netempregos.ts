@@ -32,8 +32,22 @@ const PAGES_OVERRIDE: Record<number, number> = { 57: 5, 29: 5 };
 function pagesForCategory(categoryId: number): number {
   return PAGES_OVERRIDE[categoryId] ?? DEFAULT_PAGES_PER_CATEGORY;
 }
-const HEADERS = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" };
 const BASE_URL = "https://www.net-empregos.com";
+
+// Conjunto mais completo de headers (não só User-Agent) — pedidos vindos do IP da Vercel estavam a
+// devolver 0 resultados em produção enquanto localmente funcionavam sempre, o que sugere alguma
+// heurística anti-bot a barrar pedidos "demasiado nus". Referer + Accept*/sec-fetch-* imitam melhor
+// um pedido real de browser a navegar dentro do próprio site.
+const HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+  "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.8",
+  Referer: `${BASE_URL}/`,
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "same-origin",
+};
 
 const INTERNSHIP_KEYWORDS = ["estágio", "estagiário", "estagiária", "trainee"];
 
