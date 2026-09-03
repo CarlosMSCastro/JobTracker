@@ -1,14 +1,8 @@
-import Firecrawl from "firecrawl";
 import { detectRemoteType, hasAiSignal, isItRelevant } from "./relevance";
+import { batchFetchHtml } from "./scrape";
 import type { Fetcher, NormalizedJob } from "./types";
 
 const BASE_URL = "https://pt.indeed.com";
-
-// O Indeed bloqueia sempre pedidos vindos de IPs de datacenter (inclui a Vercel), independentemente
-// dos headers enviados — confirmado: o mesmo pedido a partir de uma rede doméstica devolve os
-// resultados normalmente. Mesma solução já usada em netempregos.ts: o Firecrawl faz o pedido a
-// partir da infraestrutura dele, contornando o bloqueio.
-const firecrawl = new Firecrawl({ apiKey: process.env.FIRECRAWL_API_KEY });
 
 // O Indeed só devolve resultados sem autenticação na 1ª página de cada pesquisa — pedir start=10+
 // redireciona para uma página de login ("page-two-signin"). Por isso não há paginação aqui: cada
@@ -75,15 +69,17 @@ export const fetchIndeed: Fetcher = async () => {
   const seenIds = new Set<string>();
 
   const urls = QUERIES.map(queryUrl);
-  const job = await firecrawl.batchScrape(urls, { options: { formats: ["rawHtml"] }, pollInterval: 2, timeout: 50 });
+  // Ao contrário do net-empregos.com, o Indeed bloqueia (403) mesmo pedidos vindos de rede doméstica
+  // — confirmado ao testar o fetch direto localmente — por isso usa sempre o Firecrawl, mesmo fora
+  // da Vercel.
+  const htmlByUrl = await batchFetchHtml(urls, { forceFirecrawl: true });
 
   const allResults: IndeedResult[] = [];
-  for (const doc of job.data) {
-    if (!doc.rawHtml) continue;
-    allResults.push(...parseResults(doc.rawHtml));
+  for (const html of htmlByUrl.values()) {
+    allResults.push(...parseResults(html));
   }
 
-  if (job.data.length > 0 && allResults.length === 0) {
+  if (htmlByUrl.size > 0 && allResults.length === 0) {
     throw new Error("Indeed bloqueou todos os pedidos (possível CAPTCHA/login exigido, ou mudou o formato da página)");
   }
 

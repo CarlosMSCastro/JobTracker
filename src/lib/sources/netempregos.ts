@@ -1,5 +1,5 @@
-import Firecrawl from "firecrawl";
 import { detectRemoteType, hasAiSignal, isItRelevant, isSalesLike } from "./relevance";
+import { batchFetchHtml } from "./scrape";
 import type { Fetcher, NormalizedJob } from "./types";
 
 // Categorias do Net-Empregos (ver select "categoria" no formulário de pesquisa do site, mapeado
@@ -34,11 +34,6 @@ function pagesForCategory(categoryId: number): number {
   return PAGES_OVERRIDE[categoryId] ?? DEFAULT_PAGES_PER_CATEGORY;
 }
 const BASE_URL = "https://www.net-empregos.com";
-
-// Via Firecrawl em vez de fetch direto: o net-empregos.com bloqueia pedidos vindos de IPs de
-// datacenter (inclui a Vercel) independentemente dos headers enviados — o Firecrawl faz o pedido
-// a partir da infraestrutura dele, contornando esse bloqueio.
-const firecrawl = new Firecrawl({ apiKey: process.env.FIRECRAWL_API_KEY });
 
 const INTERNSHIP_KEYWORDS = ["estágio", "estagiário", "estagiária", "trainee"];
 
@@ -94,8 +89,8 @@ export const fetchNetEmpregos: Fetcher = async () => {
   const seenHrefs = new Set<string>();
 
   // Um scrape por URL individual (Promise.all) excedia logo o rate limit do plano Firecrawl
-  // (10 pedidos/min) com as 28 páginas deste refresh. batchScrape entrega a lista toda numa só
-  // chamada e o Firecrawl trata do ritmo internamente.
+  // (10 pedidos/min) com as 28 páginas deste refresh. batchFetchHtml entrega a lista toda numa só
+  // chamada em produção (Firecrawl trata do ritmo internamente); em localhost usa fetch direto.
   const requestUrls: { url: string; filter: "none" | "sales" | "keyword" }[] = [];
   for (const [categoryIdStr, filter] of Object.entries(CATEGORY_FILTER)) {
     const categoryId = Number(categoryIdStr);
@@ -105,17 +100,16 @@ export const fetchNetEmpregos: Fetcher = async () => {
   }
   const filterByUrl = new Map(requestUrls.map(({ url, filter }) => [url, filter]));
 
-  const job = await firecrawl.batchScrape(
+  const htmlByUrl = await batchFetchHtml(
     requestUrls.map((r) => r.url),
-    { options: { formats: ["rawHtml"] }, pollInterval: 2, timeout: 50 },
+    { encoding: "iso-8859-1" },
   );
 
   const results: { items: ScrapedItem[]; filter: "none" | "sales" | "keyword" }[] = [];
-  for (const doc of job.data) {
-    const sourceUrl = doc.metadata?.sourceURL ?? doc.metadata?.url;
-    const filter = sourceUrl ? filterByUrl.get(sourceUrl) : undefined;
-    if (!filter || !doc.rawHtml) continue;
-    results.push({ items: parseListingPage(doc.rawHtml), filter });
+  for (const [url, html] of htmlByUrl) {
+    const filter = filterByUrl.get(url);
+    if (!filter) continue;
+    results.push({ items: parseListingPage(html), filter });
   }
 
   for (const { items, filter } of results) {
