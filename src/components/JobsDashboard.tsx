@@ -65,15 +65,36 @@ export function JobsDashboard() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [total, setTotal] = useState(0);
   const [sources, setSources] = useState<Source[]>([]);
+  const [sourcesLoaded, setSourcesLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reinicia o estado de carregamento sempre que o perfil muda, antes do novo fetch
+    setSourcesLoaded(false);
     fetch(`/api/sources?profile=${profile}`)
       .then((r) => r.json())
-      .then((data) => setSources(data.sources ?? []));
+      .then((data) => {
+        setSources(data.sources ?? []);
+        setSourcesLoaded(true);
+      });
   }, [profile]);
+
+  // O filtro "Fonte" (sourceId) fica guardado no localStorage partilhado entre os dois perfis (ver
+  // FILTERS_STORAGE_KEY) — sem isto, trocar de perfil deixava o filtro "ligado" com um id de fonte
+  // do outro perfil: a contagem aparecia (ex: "Fonte (1)") mas nada ficava marcado na lista (o id
+  // não existe nas fontes deste perfil) e a lista de vagas filtrava para um sourceId inexistente,
+  // devolvendo sempre 0. Remove qualquer sourceId que já não pertença às fontes carregadas agora.
+  useEffect(() => {
+    if (!sourcesLoaded) return;
+    const validIds = new Set(sources.map((s) => s.id));
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sincroniza o filtro guardado com a lista de fontes do perfil ativo, só corre quando `sources` muda
+    setFilters((f) => {
+      const prunedSourceId = f.sourceId.filter((id) => validIds.has(id));
+      return prunedSourceId.length === f.sourceId.length ? f : { ...f, sourceId: prunedSourceId };
+    });
+  }, [sources, sourcesLoaded]);
 
   // Carrega os filtros guardados do browser (localStorage) na primeira renderização — feito num
   // efeito, não no useState inicial, para o HTML do servidor e do cliente baterem certo no
