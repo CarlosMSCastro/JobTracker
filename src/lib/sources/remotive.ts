@@ -1,4 +1,4 @@
-import { hasAiSignal, isItRelevant } from "./relevance";
+import { hasAiSignal, isEventsRelevant, isItRelevant } from "./relevance";
 import type { Fetcher, NormalizedJob } from "./types";
 
 type RemotiveJob = {
@@ -32,18 +32,27 @@ const DEV_CATEGORIES = new Set([
 // trazer todo o tipo de apoio ao cliente genérico (ex: vendas disfarçadas de "customer success").
 const SUPPORT_CATEGORY = "Customer Service";
 
-export const fetchRemotive: Fetcher = async () => {
+// Perfil da Karol: categorias reais da Remotive para marketing/gestão/administrativo.
+const KAROL_CATEGORIES = new Set(["Marketing", "Project Management", "All others"]);
+
+export const fetchRemotive: Fetcher = async (config) => {
   const res = await fetch("https://remotive.com/api/remote-jobs");
   if (!res.ok) return [];
   const data = (await res.json()) as RemotiveResponse;
 
+  const isKarol = config.profile === "KAROL";
+  const isRelevant = isKarol ? isEventsRelevant : isItRelevant;
   const jobs: NormalizedJob[] = [];
 
   for (const job of data.jobs) {
     const haystack = `${job.title} ${job.category} ${job.tags?.join(" ") ?? ""}`;
-    const isDevCategory = DEV_CATEGORIES.has(job.category);
-    const isRelevantSupport = job.category === SUPPORT_CATEGORY && isItRelevant(haystack);
-    if (!isDevCategory && !isRelevantSupport) continue;
+    if (isKarol) {
+      if (!KAROL_CATEGORIES.has(job.category) || !isRelevant(haystack)) continue;
+    } else {
+      const isDevCategory = DEV_CATEGORIES.has(job.category);
+      const isRelevantSupport = job.category === SUPPORT_CATEGORY && isRelevant(haystack);
+      if (!isDevCategory && !isRelevantSupport) continue;
+    }
 
     const tags = job.tags ?? [];
     if (hasAiSignal(haystack) && !tags.includes("AI")) tags.push("AI");

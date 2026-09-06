@@ -138,6 +138,51 @@ const SALES_KEYWORDS = [
   "sales representative",
 ];
 
+// Eventos/turismo/hotelaria — perfil da Karol.
+const EVENTS_TOURISM_KEYWORDS = [
+  "eventos",
+  "event manager",
+  "event planner",
+  "gestor de eventos",
+  "gestora de eventos",
+  "wedding planner",
+  "turismo",
+  "hotelaria",
+  "hotel",
+  "hóspedes",
+  "receção de hotel",
+  "guest relations",
+  "animador turístico",
+  "animadora turística",
+];
+
+// Marketing/comunicação/relações públicas — perfil da Karol.
+const MARKETING_COMMS_KEYWORDS = [
+  "marketing",
+  "comunicação",
+  "relações públicas",
+  "social media",
+  "gestor de redes sociais",
+  "gestora de redes sociais",
+  "publicidade",
+  "brand manager",
+  "growth marketing",
+  "conteúdo digital",
+  "content marketing",
+];
+
+export function isEventsRelevant(text: string): boolean {
+  const haystack = text.toLowerCase();
+
+  if (matchesAny(haystack, EVENTS_TOURISM_KEYWORDS)) return true;
+  if (matchesAny(haystack, MARKETING_COMMS_KEYWORDS)) return true;
+
+  const isSupportOrAdmin = matchesAny(haystack, ADMIN_KEYWORDS) || matchesAny(haystack, BACKOFFICE_KEYWORDS);
+  if (isSupportOrAdmin && !matchesAny(haystack, SALES_KEYWORDS)) return true;
+
+  return false;
+}
+
 // Vagas "Senior" — pedido explícito do utilizador para excluir sempre, independente da área/fonte.
 // Cobre PT e EN, incluindo a abreviatura "sr." (com ponto, para não apanhar "sra"/"srta"). Não inclui
 // "manager" sozinho porque colide com "office manager", já aceite em ADMIN_KEYWORDS.
@@ -362,7 +407,13 @@ function extractRemoteFromRestriction(text: string): string | null {
   return location;
 }
 
-export function checkAutoDiscardReason(text: string): string | null {
+export type AutoDiscardOptions = {
+  // Salta só a regra de anos de experiência — usado no perfil da Karol, que já tem experiência real
+  // na área, ao contrário do Carlos (júnior). Idioma/USA-only/remote-restriction aplicam-se sempre.
+  skipExperienceRule?: boolean;
+};
+
+export function checkAutoDiscardReason(text: string, options?: AutoDiscardOptions): string | null {
   const foreignLanguage = detectForeignLanguage(text);
   if (foreignLanguage) return `Página não está em português/inglês/espanhol (idioma detetado: ${foreignLanguage})`;
 
@@ -373,8 +424,10 @@ export function checkAutoDiscardReason(text: string): string | null {
   const remoteFrom = extractRemoteFromRestriction(text);
   if (remoteFrom) return `Remoto restrito a: ${remoteFrom}`;
 
-  const years = extractYearsRequirement(text);
-  if (years !== null && years >= MIN_YEARS_TO_EXCLUDE) return `Exige ${years}+ anos de experiência`;
+  if (!options?.skipExperienceRule) {
+    const years = extractYearsRequirement(text);
+    if (years !== null && years >= MIN_YEARS_TO_EXCLUDE) return `Exige ${years}+ anos de experiência`;
+  }
 
   return null;
 }

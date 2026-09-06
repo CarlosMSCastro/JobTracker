@@ -1,4 +1,4 @@
-import { hasAiSignal, isItRelevant } from "./relevance";
+import { hasAiSignal, isEventsRelevant, isItRelevant } from "./relevance";
 import type { Fetcher, NormalizedJob } from "./types";
 
 // Categorias reais do WeWorkRemotely (weworkremotely.com/categories/{slug}.rss).
@@ -7,6 +7,8 @@ import type { Fetcher, NormalizedJob } from "./types";
 // com toda a lista de vagas em todas as categorias, provavelmente por destaque pago. Por isso o
 // filtro de relevância corre sempre sobre o título, independentemente da categoria da fonte.
 const CATEGORIES = ["remote-programming-jobs", "remote-devops-sysadmin-jobs", "remote-customer-support-jobs"];
+// Perfil da Karol: categoria de marketing/vendas do WWR.
+const KAROL_CATEGORIES = ["remote-sales-and-marketing-jobs", "remote-customer-support-jobs"];
 
 function decodeEntities(text: string): string {
   return text
@@ -36,9 +38,13 @@ function parseFeed(xml: string): ParsedItem[] {
   return items;
 }
 
-export const fetchWeWorkRemotely: Fetcher = async () => {
+export const fetchWeWorkRemotely: Fetcher = async (config) => {
+  const isKarol = config.profile === "KAROL";
+  const isRelevant = isKarol ? isEventsRelevant : isItRelevant;
+  const categories = isKarol ? KAROL_CATEGORIES : CATEGORIES;
+
   const responses = await Promise.all(
-    CATEGORIES.map((category) =>
+    categories.map((category) =>
       fetch(`https://weworkremotely.com/categories/${category}.rss`).then((res) =>
         res.ok ? res.text() : "",
       ),
@@ -56,7 +62,7 @@ export const fetchWeWorkRemotely: Fetcher = async () => {
       const company = colonIndex > -1 ? item.title.slice(0, colonIndex).trim() : "Desconhecida";
       const position = colonIndex > -1 ? item.title.slice(colonIndex + 1).trim() : item.title;
 
-      if (!isItRelevant(position)) continue;
+      if (!isRelevant(position)) continue;
       seen.add(item.link);
 
       const haystack = `${position} ${item.category ?? ""}`;

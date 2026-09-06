@@ -1,4 +1,4 @@
-import { detectRemoteType, hasAiSignal } from "./relevance";
+import { detectRemoteType, hasAiSignal, isEventsRelevant } from "./relevance";
 import type { Fetcher, NormalizedJob } from "./types";
 
 type TeamlyzerJob = {
@@ -37,7 +37,8 @@ function extractJobs(html: string): TeamlyzerJob[] {
   return [];
 }
 
-export const fetchTeamlyzer: Fetcher = async () => {
+export const fetchTeamlyzer: Fetcher = async (config) => {
+  const isKarol = config.profile === "KAROL";
   const responses = await Promise.all(
     Array.from({ length: PAGES }, (_, i) => i + 1).map((page) =>
       fetch(`https://pt.teamlyzer.com/companies/jobs?page=${page}`, { headers: HEADERS }).then((res) =>
@@ -57,6 +58,9 @@ export const fetchTeamlyzer: Fetcher = async () => {
       const skills = job.skills ?? [];
       const location = job.jobLocation?.address?.addressLocality;
       const haystack = `${job.title} ${job.occupationalCategory ?? ""} ${skills.join(" ")} ${location ?? ""}`;
+      // Sem filtro para o Carlos (site já é TI/estágios por natureza); a Karol ganha o filtro de
+      // eventos/marketing/admin, dado que este site não tem categorias próprias para essas áreas.
+      if (isKarol && !isEventsRelevant(haystack)) continue;
       const tags = [...skills];
       if (hasAiSignal(haystack) && !tags.includes("AI")) tags.push("AI");
 

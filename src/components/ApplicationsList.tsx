@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { STATUS_COLORS, STATUS_LABELS } from "@/lib/labels";
+import { STATUS_COLORS, STATUS_LABELS, displaySourceName } from "@/lib/labels";
+import { useProfile } from "@/components/ProfileProvider";
 
 type Job = {
   id: string;
@@ -19,18 +20,23 @@ type Job = {
 const APPLICATION_STATUSES = ["APLICADA", "ENTREVISTA", "OFERTA", "REJEITADA"];
 
 export function ApplicationsList() {
+  const { profile } = useProfile();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all(APPLICATION_STATUSES.map((status) => fetch(`/api/jobs?status=${status}`).then((r) => r.json())))
+    Promise.all(
+      APPLICATION_STATUSES.map((status) =>
+        fetch(`/api/jobs?status=${status}&profile=${profile}`).then((r) => r.json()),
+      ),
+    )
       .then((results) => {
         const all = results.flatMap((r) => r.jobs ?? []) as Job[];
         all.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
         setJobs(all);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [profile]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -51,7 +57,7 @@ export function ApplicationsList() {
             <div>
               <p className="font-medium text-foreground">{job.title}</p>
               <p className="text-sm text-muted">
-                {job.company} · {job.source.name}
+                {job.company} · {displaySourceName(job.source.name)}
               </p>
             </div>
             <div className="flex items-center gap-3">

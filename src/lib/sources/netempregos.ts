@@ -1,4 +1,4 @@
-import { detectRemoteType, hasAiSignal, isItRelevant, isSalesLike } from "./relevance";
+import { detectRemoteType, hasAiSignal, isEventsRelevant, isItRelevant, isSalesLike } from "./relevance";
 import { batchFetchHtml } from "./scrape";
 import type { Fetcher, NormalizedJob } from "./types";
 
@@ -23,6 +23,16 @@ const CATEGORY_FILTER: Record<number, "none" | "sales" | "keyword"> = {
   29: "sales", // Administração / Secretariado
   30: "keyword", // Lojas / Comércio / Balcão
   52: "keyword", // Serviços Técnicos
+};
+
+// Perfil da Karol: 9 = Hotelaria/Turismo, 19 = Publicidade/Marketing, 18 = Relações Públicas
+// (descobertas por sondagem de ?categoria=N e leitura do <title>, mesma técnica documentada acima),
+// 29 = Administração/Secretariado reutilizada tal como no Carlos.
+const KAROL_CATEGORY_FILTER: Record<number, "none" | "sales" | "keyword"> = {
+  9: "none",
+  19: "keyword",
+  18: "keyword",
+  29: "sales",
 };
 
 const DEFAULT_PAGES_PER_CATEGORY = 2; // ~18 vagas por página — 2 páginas dá boa cobertura sem exagerar em pedidos
@@ -84,15 +94,18 @@ function categoryPageUrl(categoryId: number, page: number): string {
   return `${BASE_URL}/pesquisa-empregos.asp?categoria=${categoryId}&page=${page}`;
 }
 
-export const fetchNetEmpregos: Fetcher = async () => {
+export const fetchNetEmpregos: Fetcher = async (config) => {
   const jobs: NormalizedJob[] = [];
   const seenHrefs = new Set<string>();
+  const isKarol = config.profile === "KAROL";
+  const categoryFilter = isKarol ? KAROL_CATEGORY_FILTER : CATEGORY_FILTER;
+  const isRelevant = isKarol ? isEventsRelevant : isItRelevant;
 
   // Um scrape por URL individual (Promise.all) excedia logo o rate limit do plano Firecrawl
   // (10 pedidos/min) com as 28 páginas deste refresh. batchFetchHtml entrega a lista toda numa só
   // chamada em produção (Firecrawl trata do ritmo internamente); em localhost usa fetch direto.
   const requestUrls: { url: string; filter: "none" | "sales" | "keyword" }[] = [];
-  for (const [categoryIdStr, filter] of Object.entries(CATEGORY_FILTER)) {
+  for (const [categoryIdStr, filter] of Object.entries(categoryFilter)) {
     const categoryId = Number(categoryIdStr);
     for (let page = 1; page <= pagesForCategory(categoryId); page++) {
       requestUrls.push({ url: categoryPageUrl(categoryId, page), filter });
@@ -115,7 +128,7 @@ export const fetchNetEmpregos: Fetcher = async () => {
   for (const { items, filter } of results) {
     for (const item of items) {
       if (seenHrefs.has(item.href)) continue;
-      if (filter === "keyword" && !isItRelevant(item.title)) continue;
+      if (filter === "keyword" && !isRelevant(item.title)) continue;
       if (filter === "sales" && isSalesLike(item.title)) continue;
       seenHrefs.add(item.href);
 

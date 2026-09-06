@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useProfile } from "@/components/ProfileProvider";
+import { displaySourceName } from "@/lib/labels";
 
 type Source = {
   id: string;
@@ -14,19 +16,20 @@ type Source = {
 };
 
 export function SourcesList() {
+  const { profile } = useProfile();
   const [sources, setSources] = useState<Source[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchingId, setFetchingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   function load() {
-    fetch("/api/sources")
+    fetch(`/api/sources?profile=${profile}`)
       .then((r) => r.json())
       .then((data) => setSources(data.sources ?? []))
       .finally(() => setLoading(false));
   }
 
-  useEffect(load, []);
+  useEffect(load, [profile]);
 
   async function toggleActive(source: Source) {
     setSources((prev) => prev.map((s) => (s.id === source.id ? { ...s, active: !s.active } : s)));
@@ -52,9 +55,11 @@ export function SourcesList() {
       };
 
       if (summary.error) {
-        setMessage(`${source.name}: ${summary.error}`);
+        setMessage(`${displaySourceName(source.name)}: ${summary.error}`);
       } else {
-        setMessage(`${source.name}: ${summary.created} vaga(s) nova(s) (${summary.skipped} já existiam).`);
+        setMessage(
+          `${displaySourceName(source.name)}: ${summary.created} vaga(s) nova(s) (${summary.skipped} já existiam).`,
+        );
       }
       load();
     } finally {
@@ -74,7 +79,7 @@ export function SourcesList() {
           return (
             <div key={source.id} className="flex items-center justify-between gap-4 p-4">
               <div>
-                <p className="font-medium text-foreground">{source.name}</p>
+                <p className="font-medium text-foreground">{displaySourceName(source.name)}</p>
                 <p className="text-sm text-muted">
                   {source.type}
                   {source.area ? ` · ${source.area}` : ""}

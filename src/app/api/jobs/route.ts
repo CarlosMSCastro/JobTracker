@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { NORTE_REGION_KEYWORDS } from "@/lib/sources/relevance";
-import type { JobStatus, Prisma, RemoteType } from "@/generated/prisma/client";
+import type { JobStatus, Prisma, Profile, RemoteType } from "@/generated/prisma/client";
 
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
 
   const where: Prisma.JobWhereInput = {};
+
+  // Escopo por perfil (Carlos/Karol) — nunca misturar vagas dos dois. Ver src/components/ProfileProvider.tsx.
+  const profile = params.get("profile");
+  if (profile) where.source = { is: { profile: profile as Profile } };
 
   const remoteType = params.getAll("remoteType");
   if (remoteType.length) where.remoteType = { in: remoteType as RemoteType[] };

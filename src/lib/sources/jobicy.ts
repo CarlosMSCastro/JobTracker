@@ -1,4 +1,4 @@
-import { hasAiSignal, isItRelevant } from "./relevance";
+import { hasAiSignal, isEventsRelevant, isItRelevant } from "./relevance";
 import type { Fetcher, NormalizedJob } from "./types";
 
 type JobicyJob = {
@@ -19,9 +19,18 @@ type JobicyResponse = {
 // cliente genérico, por isso passa pelo filtro de suporte-sem-vendas antes de entrar.
 const DEV_INDUSTRIES = ["engineering", "admin", "qa-testing", "cybersecurity", "data-science", "web-app-design"];
 const SUPPORT_INDUSTRY = "technical-support";
+// Perfil da Karol: "marketing" é suficientemente específico para confiar (tal como DEV_INDUSTRIES);
+// "management"/"all-others" são genéricos, por isso passam pelo filtro de relevância, tal como
+// SUPPORT_INDUSTRY faz para o Carlos.
+const KAROL_TRUSTED_INDUSTRIES = ["marketing"];
+const KAROL_FILTERED_INDUSTRIES = ["management", "all-others"];
 
-export const fetchJobicy: Fetcher = async () => {
-  const industries = [...DEV_INDUSTRIES, SUPPORT_INDUSTRY];
+export const fetchJobicy: Fetcher = async (config) => {
+  const isKarol = config.profile === "KAROL";
+  const isRelevant = isKarol ? isEventsRelevant : isItRelevant;
+  const trustedIndustries = isKarol ? KAROL_TRUSTED_INDUSTRIES : DEV_INDUSTRIES;
+  const filteredIndustries = isKarol ? KAROL_FILTERED_INDUSTRIES : [SUPPORT_INDUSTRY];
+  const industries = [...trustedIndustries, ...filteredIndustries];
 
   const responses = await Promise.all(
     industries.map((industry) =>
@@ -40,7 +49,7 @@ export const fetchJobicy: Fetcher = async () => {
       if (seen.has(job.id)) continue;
 
       const haystack = `${job.jobTitle} ${job.jobIndustry?.join(" ") ?? ""}`;
-      if (industry === SUPPORT_INDUSTRY && !isItRelevant(haystack)) continue;
+      if (filteredIndustries.includes(industry) && !isRelevant(haystack)) continue;
 
       seen.add(job.id);
       const tags: string[] = [];

@@ -1,4 +1,4 @@
-import { hasAiSignal, isItRelevant } from "./relevance";
+import { hasAiSignal, isEventsRelevant, isItRelevant } from "./relevance";
 import type { Fetcher, NormalizedJob } from "./types";
 
 type WorkingNomadsJob = {
@@ -11,16 +11,21 @@ type WorkingNomadsJob = {
   pub_date: string;
 };
 
-export const fetchWorkingNomads: Fetcher = async () => {
+export const fetchWorkingNomads: Fetcher = async (config) => {
   const res = await fetch("https://www.workingnomads.com/api/exposed_jobs/");
   if (!res.ok) return [];
+
+  const isKarol = config.profile === "KAROL";
+  const isRelevant = isKarol ? isEventsRelevant : isItRelevant;
+  // Categorias reais desta fonte: "Marketing" existe, tal como "Development" existe para o Carlos.
+  const trustedCategory = isKarol ? "Marketing" : "Development";
 
   const data = (await res.json()) as WorkingNomadsJob[];
   const jobs: NormalizedJob[] = [];
 
   for (const job of data) {
-    const isDevCategory = job.category_name === "Development";
-    if (!isDevCategory && !isItRelevant(job.title)) continue;
+    const isTrustedCategory = job.category_name === trustedCategory;
+    if (!isTrustedCategory && !isRelevant(job.title)) continue;
 
     const haystack = `${job.title} ${job.tags ?? ""}`;
     const tags = job.tags ? job.tags.split(",").map((t) => t.trim()) : [];

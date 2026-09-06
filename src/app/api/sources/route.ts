@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import type { Profile } from "@/generated/prisma/client";
 
-export async function GET() {
-  const sources = await prisma.source.findMany({ orderBy: { name: "asc" } });
+export async function GET(request: NextRequest) {
+  const profile = request.nextUrl.searchParams.get("profile") as Profile | null;
+  const sources = await prisma.source.findMany({
+    where: profile ? { profile } : undefined,
+    orderBy: { name: "asc" },
+  });
   return NextResponse.json({ sources });
 }
 

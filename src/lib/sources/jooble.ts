@@ -14,8 +14,12 @@ type JoobleResponse = {
   jobs: JoobleJob[];
 };
 
-// Atenção: a chave grátis da Jooble tem um limite VITALÍCIO de 500 pedidos (não mensal).
-// Esta fonte deve ficar `active: false` por defeito — ativa-a manualmente só quando quiseres gastar uma chamada.
+const KEYWORDS = "programador OR developer OR informática OR helpdesk OR suporte informático";
+const KAROL_KEYWORDS = "gestão de eventos OR marketing OR turismo OR hotelaria OR relações públicas OR administrativo";
+
+// Atenção: a chave grátis da Jooble tem um limite VITALÍCIO de 500 pedidos (não mensal), partilhado
+// entre a fonte do Carlos e a da Karol (mesma chave). Esta fonte deve ficar `active: false` por
+// defeito nos dois perfis — ativa-a manualmente só quando quiseres gastar uma chamada.
 export const fetchJooble: Fetcher = async (config) => {
   const apiKey = config.apiKey;
   if (!apiKey) return [];
@@ -24,7 +28,7 @@ export const fetchJooble: Fetcher = async (config) => {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      keywords: "programador OR developer OR informática OR helpdesk OR suporte informático",
+      keywords: config.profile === "KAROL" ? KAROL_KEYWORDS : KEYWORDS,
       location: "Portugal",
     }),
   });

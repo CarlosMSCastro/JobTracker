@@ -1,4 +1,11 @@
-import { detectRemoteType, hasAiSignal, isGermanMarketJob, isItRelevant, isPortugalLocation } from "./relevance";
+import {
+  detectRemoteType,
+  hasAiSignal,
+  isEventsRelevant,
+  isGermanMarketJob,
+  isItRelevant,
+  isPortugalLocation,
+} from "./relevance";
 import type { Fetcher, NormalizedJob } from "./types";
 
 type ArbeitnowJob = {
@@ -18,15 +25,16 @@ type ArbeitnowResponse = {
   data: ArbeitnowJob[];
 };
 
-export const fetchArbeitnow: Fetcher = async () => {
+export const fetchArbeitnow: Fetcher = async (config) => {
   const res = await fetch("https://www.arbeitnow.com/api/job-board-api");
   if (!res.ok) return [];
   const data = (await res.json()) as ArbeitnowResponse;
 
+  const isRelevant = config.profile === "KAROL" ? isEventsRelevant : isItRelevant;
   const jobs: NormalizedJob[] = [];
   for (const job of data.data) {
     const haystack = `${job.title} ${job.tags?.join(" ") ?? ""} ${job.job_types?.join(" ") ?? ""}`;
-    if (!isItRelevant(haystack)) continue;
+    if (!isRelevant(haystack)) continue;
 
     // Dominado por vagas do mercado alemão/DACH ("(m/w/d)", "Mitarbeiter", etc.) — nem sempre óbvio
     // a olho, e o filtro de país (isPortugalLocation) só se aplica a vagas presenciais/híbridas

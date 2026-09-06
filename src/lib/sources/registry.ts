@@ -1,5 +1,7 @@
 import { fetchArbeitnow } from "./arbeitnow";
 import { fetchEmpregosOrg } from "./empregos";
+import { fetchEmpregoXl } from "./empregoxl";
+import { fetchEures } from "./eures";
 import { fetchExpressoEmprego } from "./expressoemprego";
 import { fetchIndeed } from "./indeed";
 import { fetchItJobs } from "./itjobs";
@@ -8,6 +10,7 @@ import { fetchJooble } from "./jooble";
 import { fetchNetEmpregos } from "./netempregos";
 import { fetchRemoteOk } from "./remoteok";
 import { fetchRemotive } from "./remotive";
+import { fetchSapoEmprego } from "./sapoemprego";
 import { fetchTeamlyzer } from "./teamlyzer";
 import { fetchWeWorkRemotely } from "./weworkremotely";
 import { fetchWorkingNomads } from "./workingnomads";
@@ -27,4 +30,7 @@ export const FETCHERS: Record<string, Fetcher> = {
   expressoemprego: fetchExpressoEmprego,
   workingnomads: fetchWorkingNomads,
   teamlyzer: fetchTeamlyzer,
+  empregoxl: fetchEmpregoXl,
+  sapoemprego: fetchSapoEmprego,
+  eures: fetchEures,
 };

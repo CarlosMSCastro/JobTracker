@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useProfile } from "@/components/ProfileProvider";
 
 const TABS = [
   { href: "/", label: "Vagas" },
@@ -9,8 +10,11 @@ const TABS = [
   { href: "/fontes", label: "Fontes" },
 ];
 
+const PROFILE_LABELS = { CARLOS: "Carlos", KAROL: "Karol" };
+
 export function NavBar() {
   const pathname = usePathname();
+  const { profile, setProfile } = useProfile();
 
   return (
     <header className="border-b border-border bg-surface">
@@ -19,7 +23,7 @@ export function NavBar() {
           <span className="text-accent">&gt;_</span>
           Job Tracker
         </div>
-        <nav className="flex gap-1">
+        <nav className="flex items-center gap-1">
           {TABS.map((tab) => {
             const active = pathname === tab.href;
             return (
@@ -34,6 +38,14 @@ export function NavBar() {
               </Link>
             );
           })}
+          <button
+            type="button"
+            onClick={() => setProfile(null)}
+            title="Trocar perfil"
+            className="ml-2 rounded-md border border-border px-2 py-1 text-xs text-muted hover:border-accent hover:text-accent"
+          >
+            {PROFILE_LABELS[profile]}
+          </button>
         </nav>
       </div>
     </header>

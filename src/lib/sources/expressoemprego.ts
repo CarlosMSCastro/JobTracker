@@ -2,6 +2,9 @@ import { detectRemoteType, hasAiSignal } from "./relevance";
 import type { Fetcher, NormalizedJob } from "./types";
 
 const FEEDS = ["informatica", "internet"];
+// Perfil da Karol: marketing/publicidade, comunicação, administração (slugs reais confirmados no
+// índice de RSS do site).
+const KAROL_FEEDS = ["marketing-publicidade", "comunicacao", "administracao"];
 const INTERNSHIP_KEYWORDS = ["estágio", "estagiário", "estagiária", "trainee"];
 
 function decodeEntities(text: string): string {
@@ -35,11 +38,10 @@ function parseFeed(xml: string): ParsedItem[] {
   return items;
 }
 
-export const fetchExpressoEmprego: Fetcher = async () => {
+export const fetchExpressoEmprego: Fetcher = async (config) => {
+  const feeds = config.profile === "KAROL" ? KAROL_FEEDS : FEEDS;
   const responses = await Promise.all(
-    FEEDS.map((feed) =>
-      fetch(`https://expressoemprego.pt/rss/${feed}`).then((res) => (res.ok ? res.text() : "")),
-    ),
+    feeds.map((feed) => fetch(`https://expressoemprego.pt/rss/${feed}`).then((res) => (res.ok ? res.text() : ""))),
   );
 
   const seen = new Set<string>();

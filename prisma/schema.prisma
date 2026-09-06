@@ -17,6 +17,11 @@ enum SourceType {
   SCRAPER
 }
 
+enum Profile {
+  CARLOS
+  KAROL
+}
+
 enum RemoteType {
   REMOTO
   PRESENCIAL
@@ -36,6 +41,7 @@ model Source {
   id           String     @id @default(cuid())
   name         String     @unique
   type         SourceType
+  profile      Profile // obrigatório e explícito em toda a criação de fontes — sem valor por omissão
   area         String?
   active       Boolean    @default(true)
   config       String? // JSON serializado: chaves de API, URL base, seletores de scraping, etc.

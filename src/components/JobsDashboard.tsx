@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { DATE_PRESETS, REMOTE_LABELS, STATUS_COLORS, STATUS_LABELS } from "@/lib/labels";
+import { DATE_PRESETS, REMOTE_LABELS, STATUS_COLORS, STATUS_LABELS, displaySourceName } from "@/lib/labels";
+import { useProfile } from "@/components/ProfileProvider";
 
 type Job = {
   id: string;
@@ -58,6 +59,7 @@ function toggle(list: string[], value: string): string[] {
 }
 
 export function JobsDashboard() {
+  const { profile } = useProfile();
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [filtersLoaded, setFiltersLoaded] = useState(false);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -68,10 +70,10 @@ export function JobsDashboard() {
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/sources")
+    fetch(`/api/sources?profile=${profile}`)
       .then((r) => r.json())
       .then((data) => setSources(data.sources ?? []));
-  }, []);
+  }, [profile]);
 
   // Carrega os filtros guardados do browser (localStorage) na primeira renderização — feito num
   // efeito, não no useState inicial, para o HTML do servidor e do cliente baterem certo no
@@ -91,10 +93,14 @@ export function JobsDashboard() {
     localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters));
   }, [filters, filtersLoaded]);
 
-  const sourceOptions = useMemo(() => sources.map((s) => ({ value: s.id, label: s.name })), [sources]);
+  const sourceOptions = useMemo(
+    () => sources.map((s) => ({ value: s.id, label: displaySourceName(s.name) })),
+    [sources],
+  );
 
   const query = useMemo(() => {
     const params = new URLSearchParams();
+    params.set("profile", profile);
     filters.remoteType.forEach((v) => params.append("remoteType", v));
     filters.region.forEach((v) => params.append("region", v));
     filters.sourceId.forEach((v) => params.append("sourceId", v));
@@ -105,7 +111,7 @@ export function JobsDashboard() {
     if (filters.q) params.set("q", filters.q);
     if (filters.datePreset) params.set("dateFrom", daysAgoIso(Number(filters.datePreset)));
     return params.toString();
-  }, [filters]);
+  }, [filters, profile]);
 
   const loadJobs = useCallback(() => {
     setLoading(true);
@@ -331,7 +337,7 @@ function JobRow({ job, onQuickStatus }: { job: Job; onQuickStatus: (id: string, 
         <p className="truncate text-xs text-muted">
           {job.company}
           {job.location ? ` · ${job.location}` : ""}
-          {job.remoteType ? ` · ${REMOTE_LABELS[job.remoteType]}` : ""} · {job.source.name}
+          {job.remoteType ? ` · ${REMOTE_LABELS[job.remoteType]}` : ""} · {displaySourceName(job.source.name)}
           {job.publishedAt ? ` · ${new Date(job.publishedAt).toLocaleDateString("pt-PT")}` : ""}
         </p>
       </div>

@@ -24,6 +24,13 @@ export const REMOTE_LABELS: Record<string, string> = {
   HIBRIDO: "Híbrido",
 };
 
+// O nome da fonte na BD tem sempre "(Karol)" no perfil dela, só para garantir unicidade face ao par
+// homónimo do Carlos (ex: "Arbeitnow" vs. "Arbeitnow (Karol)") — mas é redundante mostrar isso na
+// interface quando já se está dentro do perfil dela. Só para exibição, nunca mexe no nome na BD.
+export function displaySourceName(name: string): string {
+  return name.replace(/,\s*Karol\)$/, ")").replace(/\s*\(Karol\)$/, "");
+}
+
 export const DATE_PRESETS = [
   { label: "Qualquer data", value: "" },
   { label: "Hoje", value: "1" },

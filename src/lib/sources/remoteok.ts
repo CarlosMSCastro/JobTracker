@@ -1,4 +1,4 @@
-import { hasAiSignal, isItRelevant } from "./relevance";
+import { hasAiSignal, isEventsRelevant, isItRelevant } from "./relevance";
 import type { Fetcher, NormalizedJob } from "./types";
 
 type RemoteOkJob = {
@@ -13,12 +13,13 @@ type RemoteOkJob = {
   url: string;
 };
 
-export const fetchRemoteOk: Fetcher = async () => {
+export const fetchRemoteOk: Fetcher = async (config) => {
   const res = await fetch("https://remoteok.com/api", {
     headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
   });
   if (!res.ok) return [];
 
+  const isRelevant = config.profile === "KAROL" ? isEventsRelevant : isItRelevant;
   const data = (await res.json()) as unknown[];
   const jobs: NormalizedJob[] = [];
 
@@ -29,7 +30,7 @@ export const fetchRemoteOk: Fetcher = async () => {
     // Filtrar só pelo título: muitas vagas "Various"/multi-departamento vêm com tags genéricas
     // (ex: "engineer", "exec", "ops") em posições completamente não-técnicas (bombeiro, manutenção),
     // o que gerava falsos positivos quando o filtro também olhava para as tags.
-    if (!isItRelevant(job.position)) continue;
+    if (!isRelevant(job.position)) continue;
 
     const haystack = `${job.position} ${job.tags?.join(" ") ?? ""}`;
     const tags = job.tags ?? [];

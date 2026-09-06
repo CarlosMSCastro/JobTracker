@@ -11,6 +11,19 @@ const API_KEY_ENV: Record<string, string | undefined> = {
   jooble: process.env.JOOBLE_API_KEY,
 };
 
+// Limite duro por fonte — descoberto na prática: o SDK do Firecrawl diz que tem um timeout próprio
+// (ver scrape.ts/autodiscard.ts), mas nem sempre o respeita (uma fonte já ficou presa dezenas de
+// minutos, bloqueando todo o refresh sequencial atrás dela). refreshAllSources() corre uma fonte de
+// cada vez com await — sem isto, uma única fonte presa impede todas as seguintes de sequer começar.
+const FETCH_TIMEOUT_MS = 60_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`fonte excedeu ${ms / 1000}s`)), ms)),
+  ]);
+}
+
 export type RefreshSummary = {
   source: string;
   fetched: number;
@@ -43,8 +56,8 @@ async function refreshSource(source: Source): Promise<RefreshSummary> {
   }
 
   try {
-    const fetcherConfig: SourceConfig = { apiKey: API_KEY_ENV[fetcherKey!] };
-    const fetchedJobs = await fetcher(fetcherConfig);
+    const fetcherConfig: SourceConfig = { apiKey: API_KEY_ENV[fetcherKey!], profile: source.profile };
+    const fetchedJobs = await withTimeout(fetcher(fetcherConfig), FETCH_TIMEOUT_MS);
     const jobs = fetchedJobs.filter((job) => !isSeniorTitle(job.title));
 
     const newJobs = await filterNewJobs(jobs);
@@ -76,7 +89,16 @@ async function refreshSource(source: Source): Promise<RefreshSummary> {
         where: { url: { in: newJobs.map((job) => job.url) } },
         select: { id: true, url: true },
       });
-      const discardResults = await checkJobPages(createdJobs.map((job) => job.url));
+      const knownTextByUrl = new Map(
+        newJobs.filter((job) => job.descriptionText !== undefined).map((job) => [job.url, job.descriptionText!]),
+      );
+      const discardResults = await checkJobPages(
+        createdJobs.map(({ url }) => ({
+          url,
+          knownText: knownTextByUrl.get(url),
+          skipExperienceRule: source.profile === "KAROL",
+        })),
+      );
       await Promise.all(
         createdJobs.map(async ({ id, url }) => {
           const result = discardResults.get(url);

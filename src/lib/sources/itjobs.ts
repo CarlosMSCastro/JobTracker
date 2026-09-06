@@ -1,4 +1,4 @@
-import { detectRemoteType, hasAiSignal } from "./relevance";
+import { detectRemoteType, hasAiSignal, isEventsRelevant } from "./relevance";
 import type { Fetcher, NormalizedJob } from "./types";
 
 type ItJobsResult = {
@@ -25,6 +25,7 @@ function detectTags(title: string, body: string | undefined): string[] {
 export const fetchItJobs: Fetcher = async (config) => {
   const apiKey = config.apiKey;
   if (!apiKey) return [];
+  const isKarol = config.profile === "KAROL";
 
   const jobs: NormalizedJob[] = [];
   let page = 1;
@@ -41,6 +42,10 @@ export const fetchItJobs: Fetcher = async (config) => {
     const data = (await res.json()) as ItJobsResponse;
 
     for (const result of data.results) {
+      // API dedicada só a vagas de TI — não há categoria de eventos/marketing possível, por isso o
+      // perfil da Karol filtra pelo título como rede de segurança e espera-se ~0 resultados sempre.
+      if (isKarol && !isEventsRelevant(result.title)) continue;
+
       const location = result.locations?.map((l) => l.name).join(", ");
       jobs.push({
         externalId: String(result.id),

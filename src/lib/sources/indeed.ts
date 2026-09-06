@@ -1,4 +1,4 @@
-import { detectRemoteType, hasAiSignal, isItRelevant } from "./relevance";
+import { detectRemoteType, hasAiSignal, isEventsRelevant, isItRelevant } from "./relevance";
 import { batchFetchHtml } from "./scrape";
 import type { Fetcher, NormalizedJob } from "./types";
 
@@ -8,6 +8,7 @@ const BASE_URL = "https://pt.indeed.com";
 // redireciona para uma página de login ("page-two-signin"). Por isso não há paginação aqui: cada
 // pesquisa dá no máximo ~15 vagas, e cobrimos mais terreno com várias pesquisas em vez de páginas.
 const QUERIES = ["programador", "informática"];
+const KAROL_QUERIES = ["gestão de eventos", "marketing", "turismo"];
 
 const JOBCARDS_MARKER = 'mosaic.providerData["mosaic-provider-jobcards"]=';
 
@@ -64,11 +65,13 @@ function parseResults(html: string): IndeedResult[] {
   return Array.isArray(results) ? results : [];
 }
 
-export const fetchIndeed: Fetcher = async () => {
+export const fetchIndeed: Fetcher = async (config) => {
   const jobs: NormalizedJob[] = [];
   const seenIds = new Set<string>();
+  const isKarol = config.profile === "KAROL";
+  const isRelevant = isKarol ? isEventsRelevant : isItRelevant;
 
-  const urls = QUERIES.map(queryUrl);
+  const urls = (isKarol ? KAROL_QUERIES : QUERIES).map(queryUrl);
   // Ao contrário do net-empregos.com, o Indeed bloqueia (403) mesmo pedidos vindos de rede doméstica
   // — confirmado ao testar o fetch direto localmente — por isso usa sempre o Firecrawl, mesmo fora
   // da Vercel.
@@ -86,7 +89,7 @@ export const fetchIndeed: Fetcher = async () => {
   for (const item of allResults) {
     const title = (item.title || item.displayTitle || "").trim();
     if (!item.jobkey || !title || seenIds.has(item.jobkey)) continue;
-    if (!isItRelevant(title)) continue;
+    if (!isRelevant(title)) continue;
     seenIds.add(item.jobkey);
 
     const haystack = `${title} ${item.formattedLocation ?? ""}`;

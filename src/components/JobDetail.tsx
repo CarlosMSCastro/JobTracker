@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { REMOTE_LABELS, STATUS_LABELS } from "@/lib/labels";
+import { REMOTE_LABELS, STATUS_LABELS, displaySourceName } from "@/lib/labels";
 
 type StatusEvent = { id: string; status: string; note: string | null; changedAt: string };
 
@@ -79,7 +79,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
           {job.remoteType ? ` · ${REMOTE_LABELS[job.remoteType]}` : ""}
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
-          <span>Fonte: {job.source.name}</span>
+          <span>Fonte: {displaySourceName(job.source.name)}</span>
           {job.publishedAt && <span>· Publicada {new Date(job.publishedAt).toLocaleDateString("pt-PT")}</span>}
           {job.isInternship && <span className="rounded border border-border bg-background px-1.5 py-0.5 text-muted">Estágio</span>}
           {job.autoExcluded && (
