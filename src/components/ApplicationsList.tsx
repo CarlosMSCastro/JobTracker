@@ -19,14 +19,23 @@ type Job = {
 // real. Mostrar aqui só o que realmente chegou a ser uma candidatura.
 const APPLICATION_STATUSES = ["APLICADA", "ENTREVISTA", "OFERTA", "REJEITADA"];
 
-export function ApplicationsList() {
+// Lista partilhada por Candidaturas e Guardadas — as duas só diferem nos estados que mostram.
+export function ApplicationsList({
+  title = "Candidaturas",
+  statuses = APPLICATION_STATUSES,
+  emptyMessage = "Ainda não marcaste nenhuma vaga como aplicada. Muda o estado de uma vaga na lista principal.",
+}: {
+  title?: string;
+  statuses?: string[];
+  emptyMessage?: string;
+}) {
   const { profile } = useProfile();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all(
-      APPLICATION_STATUSES.map((status) =>
+      statuses.map((status) =>
         fetch(`/api/jobs?status=${status}&profile=${profile}`).then((r) => r.json()),
       ),
     )
@@ -36,17 +45,15 @@ export function ApplicationsList() {
         setJobs(all);
       })
       .finally(() => setLoading(false));
-  }, [profile]);
+  }, [profile, statuses]);
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold text-foreground">Candidaturas</h1>
+      <h1 className="text-xl font-semibold text-foreground">{title}</h1>
       <div className="flex flex-col divide-y divide-border rounded-lg border border-border bg-surface">
         {loading && <p className="p-4 text-sm text-muted">A carregar...</p>}
         {!loading && jobs.length === 0 && (
-          <p className="p-4 text-sm text-muted">
-            Ainda não marcaste nenhuma vaga como aplicada. Muda o estado de uma vaga na lista principal.
-          </p>
+          <p className="p-4 text-sm text-muted">{emptyMessage}</p>
         )}
         {jobs.map((job) => (
           <Link

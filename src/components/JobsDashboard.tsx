@@ -125,8 +125,8 @@ export function JobsDashboard() {
     filters.remoteType.forEach((v) => params.append("remoteType", v));
     filters.region.forEach((v) => params.append("region", v));
     filters.sourceId.forEach((v) => params.append("sourceId", v));
-    // A vagas por triar é sempre "Nova" — vagas já tratadas (aplicada, desisti, etc.) vivem na
-    // página Candidaturas, não aqui. Ver src/components/ApplicationsList.tsx.
+    // A vagas por triar é sempre "Nova" — vagas já tratadas vivem noutras páginas: guardadas em
+    // Guardadas, aplicada/entrevista/etc. em Candidaturas. Ver src/components/ApplicationsList.tsx.
     params.set("status", "NOVA");
     if (filters.isInternship) params.set("isInternship", "true");
     if (filters.q) params.set("q", filters.q);
@@ -172,7 +172,7 @@ export function JobsDashboard() {
 
   async function quickSetStatus(jobId: string, status: string) {
     // Esta lista só mostra "Nova" (ver query acima) — mudar para outro estado tira a vaga da vista
-    // na hora, em vez de a deixar ali marcada como tratada. Ela passa a viver em Candidaturas.
+    // na hora, em vez de a deixar ali marcada como tratada. Ela passa a viver em Guardadas ou Candidaturas.
     if (status === "NOVA") {
       setJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, status } : j)));
     } else {
@@ -375,6 +375,14 @@ function JobRow({ job, onQuickStatus }: { job: Job; onQuickStatus: (id: string, 
           Auto-descartada
         </span>
       )}
+      <button
+        type="button"
+        onClick={() => onQuickStatus(job.id, "GUARDADA")}
+        title="Guardar para mais tarde (sai do feed, fica em Guardadas)"
+        className="shrink-0 rounded-md border border-border px-2 py-1 text-xs text-muted hover:border-accent hover:text-accent"
+      >
+        Guardar
+      </button>
       <select
         value={job.status}
         onChange={(e) => onQuickStatus(job.id, e.target.value)}

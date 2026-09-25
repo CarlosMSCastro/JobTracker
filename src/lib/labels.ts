@@ -1,5 +1,6 @@
 export const STATUS_LABELS: Record<string, string> = {
   NOVA: "Nova",
+  GUARDADA: "Guardada",
   APLICADA: "Aplicada",
   ENTREVISTA: "Entrevista",
   REJEITADA: "Rejeitada",
@@ -11,6 +12,7 @@ export const STATUS_LABELS: Record<string, string> = {
 // para o acento continuar a significar só "ação/destaque" e o estado ler-se como um badge de CI.
 export const STATUS_COLORS: Record<string, string> = {
   NOVA: "border-blue-400/30 bg-blue-500/10 text-blue-300",
+  GUARDADA: "border-cyan-400/30 bg-cyan-500/10 text-cyan-300",
   APLICADA: "border-amber-400/30 bg-amber-500/10 text-amber-300",
   ENTREVISTA: "border-purple-400/30 bg-purple-500/10 text-purple-300",
   REJEITADA: "border-red-400/30 bg-red-500/10 text-red-300",

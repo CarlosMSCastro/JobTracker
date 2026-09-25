@@ -30,6 +30,7 @@ enum RemoteType {
 
 enum JobStatus {
   NOVA
+  GUARDADA // guardada para mais tarde — sai do feed e da limpeza por idade, mas ainda não é candidatura
   APLICADA
   ENTREVISTA
   REJEITADA

@@ -6,6 +6,7 @@ import { useProfile } from "@/components/ProfileProvider";
 
 const TABS = [
   { href: "/", label: "Vagas" },
+  { href: "/guardadas", label: "Guardadas" },
   { href: "/candidaturas", label: "Candidaturas" },
   { href: "/fontes", label: "Fontes" },
 ];

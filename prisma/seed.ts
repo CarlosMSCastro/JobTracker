@@ -66,6 +66,14 @@ const sources = [
     config: JSON.stringify({ fetcherKey: "jobicy" }),
   },
   {
+    name: "Jobgether",
+    type: "API" as const,
+    profile: "CARLOS" as const,
+    area: "Dev/TI",
+    active: true,
+    config: JSON.stringify({ fetcherKey: "jobgether" }),
+  },
+  {
     name: "WeWorkRemotely",
     type: "RSS" as const,
     profile: "CARLOS" as const,
@@ -213,6 +221,14 @@ const sources = [
     area: "Eventos/Marketing",
     active: true,
     config: JSON.stringify({ fetcherKey: "jobicy" }),
+  },
+  {
+    name: "Jobgether (Karol)",
+    type: "API" as const,
+    profile: "KAROL" as const,
+    area: "Eventos/Marketing",
+    active: true,
+    config: JSON.stringify({ fetcherKey: "jobgether" }),
   },
   {
     name: "WeWorkRemotely (Karol)",
