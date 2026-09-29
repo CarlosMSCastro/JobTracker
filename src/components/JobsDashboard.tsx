@@ -383,6 +383,14 @@ function JobRow({ job, onQuickStatus }: { job: Job; onQuickStatus: (id: string, 
       >
         Guardar
       </button>
+      <button
+        type="button"
+        onClick={() => onQuickStatus(job.id, "DESISTI")}
+        title="Desistir desta vaga (sai do feed)"
+        className="shrink-0 rounded-md border border-border px-2 py-1 text-xs text-muted hover:border-red-400 hover:text-red-400"
+      >
+        Desisti
+      </button>
       <select
         value={job.status}
         onChange={(e) => onQuickStatus(job.id, e.target.value)}
