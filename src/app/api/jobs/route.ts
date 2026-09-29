@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { NORTE_REGION_KEYWORDS } from "@/lib/sources/relevance";
+import { MAX_AGE_DAYS } from "@/lib/cleanup";
 import type { JobStatus, Prisma, Profile, RemoteType } from "@/generated/prisma/client";
 
 export async function GET(request: NextRequest) {
@@ -56,16 +57,28 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  if (and.length) where.AND = and;
-
   const dateFrom = params.get("dateFrom");
   const dateTo = params.get("dateTo");
+  // Vagas guardadas/candidaturas nunca ficam escondidas por idade; as restantes têm limite de MAX_AGE_DAYS.
+  const KEEP_STATUSES: JobStatus[] = ["GUARDADA", "APLICADA", "ENTREVISTA", "OFERTA"];
+  const ageLimit = new Date(Date.now() - MAX_AGE_DAYS * 24 * 60 * 60 * 1000);
   if (dateFrom || dateTo) {
     where.publishedAt = {
       ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
       ...(dateTo ? { lte: new Date(dateTo) } : {}),
     };
+  } else {
+    // Sem filtro manual: esconde vagas mais velhas que MAX_AGE_DAYS (exceto estados preservados).
+    and.push({
+      OR: [
+        { status: { in: KEEP_STATUSES } },
+        { publishedAt: { gte: ageLimit } },
+        { publishedAt: null },
+      ],
+    });
   }
+
+  if (and.length) where.AND = and;
 
   const [jobs, total] = await Promise.all([
     prisma.job.findMany({
